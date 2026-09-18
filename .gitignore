@@ -1,0 +1,26 @@
+# 依赖
+node_modules/
+
+# 构建产物
+dist/
+build/
+*.tsbuildinfo
+
+# 环境变量与本地配置
+.env
+.env.*
+!.env.example
+
+# 日志
+*.log
+npm-debug.log*
+
+# 本地 SQLite 数据（~/.workbench 或项目内）
+*.db
+*.db-wal
+*.db-shm
+.workbench/
+
+# 系统文件
+.DS_Store
+Thumbs.db

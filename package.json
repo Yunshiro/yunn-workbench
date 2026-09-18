@@ -1,0 +1,14 @@
+{
+  "name": "pi-workbench",
+  "version": "0.1.0",
+  "private": true,
+  "description": "信息工作台：RSS 聚合 + Pi 驱动的选题发现",
+  "type": "module",
+  "scripts": {
+    "install:all": "npm --prefix server install && npm --prefix web install",
+    "dev:server": "npm --prefix server run dev",
+    "dev:web": "npm --prefix web run dev",
+    "build:web": "npm --prefix web run build",
+    "start": "npm --prefix server run start"
+  }
+}
