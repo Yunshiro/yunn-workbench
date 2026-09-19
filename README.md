@@ -37,15 +37,61 @@ Yunn Workbench 希望把内容创作者日常使用的多种工具收进同一�
 
 ## 下载桌面版
 
-前往 [GitHub Releases](https://github.com/Yunshiro/yunn-workbench/releases) 下载最新版本：
+当前版本：[Yunn Workbench v0.1.0 Beta 1](https://github.com/Yunshiro/yunn-workbench/releases/tag/v0.1.0-beta.1)
 
-- macOS Apple Silicon：下载 `.dmg`
-- Windows x64：下载 `Yunn-Workbench-Setup.exe`
+所有版本：[GitHub Releases](https://github.com/Yunshiro/yunn-workbench/releases)
 
 桌面版已经包含运行所需的前端、服务端和 Electron 环境，普通用户不需要安装 Node.js。首次使用时，只需要在 **Agent 设置** 中配置自己的模型服务和 API Key。
 
 > [!WARNING]
 > 当前 Beta 安装包未进行代码签名。macOS 可能提示无法验证开发者，可在 Finder 中右键应用并选择“打开”；Windows 可能显示“未知发布者”或 SmartScreen 提示。请只从本仓库的 Releases 页面下载安装包。
+
+### macOS 安装
+
+当前安装包支持 Apple Silicon，即 M1、M2、M3、M4 等芯片。
+
+1. 在 Release 的 **Assets** 区域下载 `Yunn-Workbench-0.1.0-beta.1-macOS-arm64.dmg`。
+2. 双击打开 DMG，将 **Yunn Workbench** 拖入 **Applications（应用程序）** 文件夹。
+3. 打开 Finder，进入“应用程序”，找到 **Yunn Workbench**。
+4. 首次启动时右键应用并选择“打开”，然后在系统提示中再次确认“打开”。
+
+安装完成后可以推出并删除下载的 DMG。当前版本暂不提供 Intel Mac 安装包。
+
+### Windows 安装
+
+当前安装包支持 Windows x64。
+
+1. 在 Release 的 **Assets** 区域下载 `Yunn-Workbench-0.1.0-beta.1-Windows-x64-Setup.exe`。
+2. 双击运行安装程序。
+3. 如果 Windows SmartScreen 显示保护提示，点击“更多信息”，确认文件来自本仓库后选择“仍要运行”。
+4. 安装完成后，从开始菜单或桌面快捷方式启动 **Yunn Workbench**。
+
+### 校验下载文件（可选）
+
+Release 中同时提供 `SHA256SUMS.txt`。可以用它确认安装包在下载过程中没有损坏。
+
+macOS：
+
+```bash
+shasum -a 256 Yunn-Workbench-0.1.0-beta.1-macOS-arm64.dmg
+```
+
+Windows PowerShell：
+
+```powershell
+Get-FileHash .\Yunn-Workbench-0.1.0-beta.1-Windows-x64-Setup.exe -Algorithm SHA256
+```
+
+将命令输出与 `SHA256SUMS.txt` 中对应文件的值进行比较。
+
+### 首次启动
+
+1. 打开侧边栏的 **Agent 设置**。
+2. 新建模型配置，选择服务商和模型，并填写自己的 API Key。
+3. 保存并启用配置，通过连接测试后即可使用 AI 任务。
+4. 前往 **订阅源** 添加 RSS 地址，开始构建自己的信息流。
+
+应用数据和 API Key 默认只保存在本机。具体目录和备份方式参见下方的“数据与环境变量”。
 
 ## 从源码运行 Web 版
 
