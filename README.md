@@ -114,7 +114,7 @@ npm run make:desktop
 - Windows 会生成 Squirrel 安装程序。
 - Pi Agent 包含平台相关模块，因此 macOS 和 Windows 安装包需要在对应系统上构建。
 
-仓库中的 GitHub Actions 可在 macOS 和 Windows Runner 上生成未签名安装包，也可通过推送 `v*` 标签自动触发构建。
+仓库中的 GitHub Actions 可在 macOS 和 Windows Runner 上生成未签名安装包。推送 `v*` 标签后，工作流会自动构建两个平台、创建 GitHub Pre-release，并上传安装包和 SHA-256 校验文件。
 
 ## 配置 AI 模型
 

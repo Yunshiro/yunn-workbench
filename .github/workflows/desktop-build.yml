@@ -58,3 +58,63 @@ jobs:
           path: desktop/out/make/**/*
           if-no-files-found: error
           retention-days: 14
+
+  release:
+    name: Publish GitHub pre-release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download installers
+        uses: actions/download-artifact@v4
+        with:
+          pattern: yunn-workbench-*-${{ github.ref_name }}
+          path: downloaded-artifacts
+          merge-multiple: true
+
+      - name: Prepare release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          mkdir -p release-assets
+
+          mac_dmg="$(find downloaded-artifacts -type f -name '*.dmg' -print -quit)"
+          mac_zip="$(find downloaded-artifacts -type f -name '*.zip' -print -quit)"
+          windows_setup="$(find downloaded-artifacts -type f -name '*Setup.exe' -print -quit)"
+
+          test -n "$mac_dmg"
+          test -n "$mac_zip"
+          test -n "$windows_setup"
+
+          cp "$mac_dmg" "release-assets/Yunn-Workbench-${version}-macOS-arm64.dmg"
+          cp "$mac_zip" "release-assets/Yunn-Workbench-${version}-macOS-arm64.zip"
+          cp "$windows_setup" "release-assets/Yunn-Workbench-${version}-Windows-x64-Setup.exe"
+
+          cd release-assets
+          sha256sum * > SHA256SUMS.txt
+
+      - name: Create or update pre-release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release upload "$tag" release-assets/* \
+              --repo "$GITHUB_REPOSITORY" \
+              --clobber
+          else
+            gh release create "$tag" release-assets/* \
+              --repo "$GITHUB_REPOSITORY" \
+              --verify-tag \
+              --title "Yunn Workbench $tag" \
+              --generate-notes \
+              --prerelease \
+              --latest=false
+          fi
