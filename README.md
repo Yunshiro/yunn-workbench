@@ -9,19 +9,17 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Yunshiro/yunn-workbench/actions/workflows/desktop-build.yml">
-    <img src="https://github.com/Yunshiro/yunn-workbench/actions/workflows/desktop-build.yml/badge.svg" alt="Desktop build" />
+  <a href="https://www.npmjs.com/package/yunn-workbench">
+    <img src="https://img.shields.io/npm/v/yunn-workbench?label=npm" alt="npm version" />
   </a>
-  <a href="https://github.com/Yunshiro/yunn-workbench/releases">
-    <img src="https://img.shields.io/github/v/release/Yunshiro/yunn-workbench?include_prereleases&label=release" alt="GitHub Release" />
-  </a>
+  <img src="https://img.shields.io/badge/node-%3E%3D24-339933" alt="Node.js >= 24" />
 </p>
 
 ## 关于项目
 
 Yunn Workbench 希望把内容创作者日常使用的多种工具收进同一个工作台：从订阅信息源开始，经过阅读、收藏和 AI 分析，形成选题，再沉淀为可继续编辑的草稿。
 
-项目同时提供 Web 版和 Electron 桌面版。两者复用同一套 React 界面、Express API 和 SQLite 数据层，因此核心功能保持一致；桌面版会在本机启动后端服务，不依赖远程服务器。
+项目以 npm CLI 的形式发布。运行 `yworkbench` 后会在本机启动 Express 服务并自动打开浏览器，React 界面、API 和 SQLite 数据均在本机运行，不依赖远程 Yunn Workbench 服务。
 
 ## 核心功能
 
@@ -33,64 +31,62 @@ Yunn Workbench 希望把内容创作者日常使用的多种工具收进同一�
 - **提示词管理**：在界面中调整任务指令，无需直接修改服务端代码。
 - **选题与草稿**：保存候选选题，关联素材，并继续完成草稿写作。
 - **本地数据存储**：SQLite、模型配置、提示词和研究会话默认保存在用户本机。
-- **Web 与桌面共存**：同一套业务能力可通过浏览器或 macOS、Windows 客户端使用。
+- **跨平台 CLI**：通过同一个 npm 包在 macOS、Windows 和 Linux 上启动完整工作台。
 
-## 下载桌面版
+## 安装与运行
 
-当前版本：[Yunn Workbench v0.1.0 Beta 3](https://github.com/Yunshiro/yunn-workbench/releases/tag/v0.1.0-beta.3)
+### 环境要求
 
-所有版本：[GitHub Releases](https://github.com/Yunshiro/yunn-workbench/releases)
+- Node.js 24 或更高版本
+- npm
+- 一个现代浏览器
 
-桌面版已经包含运行所需的前端、服务端和 Electron 环境，普通用户不需要安装 Node.js。首次使用时，只需要在 **Agent 设置** 中配置自己的模型服务和 API Key。
-
-> [!WARNING]
-> 当前 Beta 安装包未进行代码签名。macOS 可能提示无法验证开发者，可在 Finder 中右键应用并选择“打开”；Windows 可能显示“未知发布者”或 SmartScreen 提示。请只从本仓库的 Releases 页面下载安装包。
-
-### macOS 安装
-
-当前安装包支持 Apple Silicon，即 M1、M2、M3、M4 等芯片。
-
-1. 在 Release 的 **Assets** 区域下载 `Yunn-Workbench-0.1.0-beta.3-macOS-arm64.dmg`。
-2. 双击打开 DMG，将 **Yunn Workbench** 拖入 **Applications（应用程序）** 文件夹。
-3. 打开 Finder，进入“应用程序”，找到 **Yunn Workbench**。
-4. 首次启动时右键应用并选择“打开”，然后在系统提示中再次确认“打开”。
-
-安装完成后可以推出并删除下载的 DMG。当前版本暂不提供 Intel Mac 安装包。
-
-如果确认安装包来自本仓库、SHA-256 校验一致，但 macOS 仍提示应用“已损坏”，可以在终端中仅移除该应用的下载隔离属性，然后重新打开：
+### 全局安装
 
 ```bash
-xattr -dr com.apple.quarantine "/Applications/Yunn Workbench.app"
+npm install -g yunn-workbench@beta
 ```
 
-不要使用关闭全局 Gatekeeper 的命令；上述命令只作用于这一个应用。
-
-### Windows 安装
-
-当前安装包支持 Windows x64。
-
-1. 在 Release 的 **Assets** 区域下载 `Yunn-Workbench-0.1.0-beta.3-Windows-x64-Setup.exe`。
-2. 双击运行安装程序。
-3. 如果 Windows SmartScreen 显示保护提示，点击“更多信息”，确认文件来自本仓库后选择“仍要运行”。
-4. 安装完成后，从开始菜单或桌面快捷方式启动 **Yunn Workbench**。
-
-### 校验下载文件（可选）
-
-Release 中同时提供 `SHA256SUMS.txt`。可以用它确认安装包在下载过程中没有损坏。
-
-macOS：
+安装完成后运行：
 
 ```bash
-shasum -a 256 Yunn-Workbench-0.1.0-beta.3-macOS-arm64.dmg
+yworkbench
 ```
 
-Windows PowerShell：
+命令会自动选择一个空闲的本地端口并打开默认浏览器。终端需要保持运行；按 `Ctrl+C` 可以停止服务。
 
-```powershell
-Get-FileHash .\Yunn-Workbench-0.1.0-beta.3-Windows-x64-Setup.exe -Algorithm SHA256
+不想全局安装时，也可以直接运行：
+
+```bash
+npx yunn-workbench@beta
 ```
 
-将命令输出与 `SHA256SUMS.txt` 中对应文件的值进行比较。
+### 命令选项
+
+```bash
+yworkbench --port 3001
+yworkbench --data-dir ./workbench-data
+yworkbench --no-open
+yworkbench --version
+yworkbench --help
+```
+
+| 选项 | 用途 |
+| --- | --- |
+| `--port <端口>` | 指定本地端口，默认自动选择空闲端口 |
+| `--data-dir <目录>` | 指定数据库、模型配置和会话目录 |
+| `--no-open` | 启动后不自动打开浏览器 |
+| `-v, --version` | 显示当前版本 |
+| `-h, --help` | 显示命令帮助 |
+
+### 更新与卸载
+
+```bash
+npm install -g yunn-workbench@beta
+npm uninstall -g yunn-workbench
+```
+
+卸载 npm 包不会删除 `~/.workbench` 中的本地数据。
 
 ### 首次启动
 
@@ -101,7 +97,7 @@ Get-FileHash .\Yunn-Workbench-0.1.0-beta.3-Windows-x64-Setup.exe -Algorithm SHA2
 
 应用数据和 API Key 默认只保存在本机。具体目录和备份方式参见下方的“数据与环境变量”。
 
-## 从源码运行 Web 版
+## 从源码运行
 
 ### 环境要求
 
@@ -132,43 +128,16 @@ npm run dev:web
 
 浏览器访问 <http://127.0.0.1:5173>。Vite 会把 `/api` 请求代理到默认的 `3001` 端口。
 
-### 单进程运行
+### 构建并运行完整工作台
 
-先构建前端，再由 Express 同时提供 API 和静态页面：
+构建前端和服务端，再通过 CLI 启动：
 
 ```bash
-npm run build:web
+npm run build
 npm start
 ```
 
-浏览器访问 <http://127.0.0.1:3001>。
-
-## 开发桌面版
-
-安装全部依赖：
-
-```bash
-npm run install:all
-npm run install:desktop
-```
-
-启动 Electron：
-
-```bash
-npm run desktop
-```
-
-生成当前操作系统的安装包：
-
-```bash
-npm run make:desktop
-```
-
-- macOS 会生成 DMG 和 ZIP。
-- Windows 会生成 Squirrel 安装程序。
-- Pi Agent 包含平台相关模块，因此 macOS 和 Windows 安装包需要在对应系统上构建。
-
-仓库中的 GitHub Actions 可在 macOS 和 Windows Runner 上生成未签名安装包。推送 `v*` 标签后，工作流会自动构建两个平台、创建 GitHub Pre-release，并上传安装包和 SHA-256 校验文件。
+CLI 会输出实际访问地址并自动打开浏览器。
 
 ## 配置 AI 模型
 
@@ -205,25 +174,18 @@ npm run make:desktop
 
 ## 数据与环境变量
 
-Web 版默认将数据保存在：
+CLI 和源码运行模式默认将数据保存在：
 
 ```text
 ~/.workbench/
 ```
 
-桌面版使用 Electron 的用户数据目录：
-
-```text
-macOS:   ~/Library/Application Support/Yunn Workbench/data/
-Windows: %APPDATA%\Yunn Workbench\data\
-```
-
-首次启动时会自动创建 SQLite 数据库和所需数据表。备份时建议先退出应用，然后复制整个数据目录。
+首次启动时会自动创建 SQLite 数据库和所需数据表。备份时建议先停止服务，然后复制整个数据目录。
 
 | 环境变量 | 默认值 | 用途 |
 | --- | --- | --- |
 | `WORKBENCH_HOME` | `~/.workbench` | 数据库、模型配置和研究会话目录 |
-| `WORKBENCH_PORT` | `3001` | API 与生产页面端口 |
+| `WORKBENCH_PORT` | CLI 自动选择；源码服务为 `3001` | API 与生产页面端口 |
 | `WORKBENCH_HOST` | `127.0.0.1` | 服务监听地址 |
 | `WORKBENCH_WEB_DIST` | `web/dist` | 前端构建产物目录 |
 | `WORKBENCH_THINKING` | `medium` | Agent 推理级别 |
@@ -242,11 +204,7 @@ yunn-workbench/
 │       ├── lib/
 │       ├── styles/
 │       └── views/
-├── desktop/                 # Electron 主进程与打包配置
-│   ├── assets/
-│   ├── scripts/
-│   └── src/
-└── .github/workflows/       # macOS / Windows 自动构建
+└── cli/                     # yworkbench 命令入口
 ```
 
 数据流大致如下：
@@ -261,24 +219,24 @@ React UI ── API / SSE ──> Express ──> SQLite
 
 | 命令 | 作用 |
 | --- | --- |
-| `npm run install:all` | 安装 Web 和 Server 依赖 |
-| `npm run install:desktop` | 安装 Electron 依赖 |
+| `npm run install:all` | 安装根包、Web 和 Server 依赖 |
 | `npm run dev:server` | 启动服务端开发模式 |
 | `npm run dev:web` | 启动前端开发模式 |
 | `npm run build:web` | 类型检查并构建前端 |
-| `npm start` | 启动服务端及已构建的 Web 页面 |
-| `npm run desktop` | 启动桌面开发版 |
-| `npm run package:desktop` | 生成未安装的桌面应用包 |
-| `npm run make:desktop` | 生成桌面安装程序 |
+| `npm run build:server` | 构建服务端 |
+| `npm run build` | 构建可发布的完整工作台 |
+| `npm start` | 通过 CLI 启动已构建的工作台 |
+| `npm pack` | 构建并生成 npm 发布包 |
+| `npm run publish:beta` | 以 `beta` dist-tag 发布到 npm |
 
 ## 参与贡献
 
 欢迎提交 Issue 和 Pull Request。提交前请至少运行：
 
 ```bash
-npm run build:web
+npm run build
 cd server && npm exec -- tsc --noEmit
-cd ../desktop && npm exec -- tsc -p tsconfig.json --noEmit
+cd .. && node cli/yworkbench.js --help
 ```
 
 提交信息建议使用 Conventional Commits，例如：
@@ -290,7 +248,7 @@ fix: prevent duplicate RSS items
 
 ## 当前状态
 
-项目处于 Beta 阶段，功能和本地数据结构仍可能调整。升级前建议备份数据目录，并在 Release 页面查看版本说明。
+项目处于 Beta 阶段，功能和本地数据结构仍可能调整。升级 npm 包前建议备份数据目录，并查看版本说明。
 
 ## 许可证
 

@@ -1,18 +1,54 @@
 {
-  "name": "pi-workbench",
-  "version": "0.1.0-beta.3",
-  "private": true,
+  "name": "yunn-workbench",
+  "version": "0.1.0-beta.4",
   "description": "Yunn Workbench：RSS 聚合 + Pi 驱动的选题发现",
   "type": "module",
+  "bin": {
+    "yworkbench": "cli/yworkbench.js"
+  },
+  "files": [
+    "cli/",
+    "server/dist/",
+    "web/dist/",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Yunshiro/yunn-workbench.git"
+  },
+  "homepage": "https://github.com/Yunshiro/yunn-workbench#readme",
+  "bugs": {
+    "url": "https://github.com/Yunshiro/yunn-workbench/issues"
+  },
+  "keywords": [
+    "ai",
+    "rss",
+    "content-workbench",
+    "cli"
+  ],
+  "license": "UNLICENSED",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "scripts": {
-    "install:all": "npm --prefix server install && npm --prefix web install",
-    "install:desktop": "npm --prefix desktop install",
+    "install:all": "npm install --ignore-scripts && npm --prefix server install && npm --prefix web install",
     "dev:server": "npm --prefix server run dev",
     "dev:web": "npm --prefix web run dev",
     "build:web": "npm --prefix web run build",
-    "desktop": "npm --prefix desktop start",
-    "package:desktop": "npm --prefix desktop run package",
-    "make:desktop": "npm --prefix desktop run make",
-    "start": "npm --prefix server run start"
+    "build:server": "npm --prefix server run build",
+    "build": "npm run build:web && npm run build:server",
+    "start": "node cli/yworkbench.js",
+    "prepack": "npm run build",
+    "publish:beta": "npm publish --tag beta --access public"
+  },
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "^0.85.1",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "rss-parser": "^3.13.0"
   }
 }

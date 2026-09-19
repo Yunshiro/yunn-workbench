@@ -59,7 +59,7 @@ export interface WorkbenchServer {
 
 let activeServer: WorkbenchServer | null = null;
 
-/** 启动可被 CLI 与 Electron 共同复用的本地服务。 */
+/** 启动可被 CLI 与源码开发模式共同复用的本地服务。 */
 export async function startWorkbenchServer(options: { port?: number; host?: string } = {}): Promise<WorkbenchServer> {
   if (activeServer) return activeServer;
   const port = options.port ?? PORT;
