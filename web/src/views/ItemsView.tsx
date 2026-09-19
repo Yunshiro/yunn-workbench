@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowSquareOut,
   CaretDown,
+  CaretLeft,
   CaretRight,
   CheckSquareOffset,
   Gauge,
@@ -17,8 +18,11 @@ import { timeAgo, truncate } from "../lib/format";
 import type { Feed, Item, Task, TaskKind } from "../lib/types";
 import { Checkbox, EmptyState, ErrorBanner, SkeletonList } from "../components/ui";
 import TaskLiveModal from "../components/TaskLiveModal";
+import ResearchWorkspace from "../components/ResearchWorkspace";
 
 type Mode = "all" | "unread" | "starred";
+
+const PAGE_SIZE_OPTIONS = [20, 50, 100];
 
 const TASK_ACTIONS: { kind: TaskKind; label: string; icon: typeof NotePencil }[] = [
   { kind: "summarize", label: "摘要", icon: NotePencil },
@@ -36,10 +40,14 @@ export default function ItemsView({ onUnreadChange }: { onUnreadChange?: (n: num
   const [feedId, setFeedId] = useState("");
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [total, setTotal] = useState(0);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [activeTask, setActiveTask] = useState<Task | null>(null);
+  const [researchItems, setResearchItems] = useState<Item[] | null>(null);
   const [running, setRunning] = useState(false);
 
   const loadFeeds = useCallback(async () => {
@@ -58,15 +66,20 @@ export default function ItemsView({ onUnreadChange }: { onUnreadChange?: (n: num
         unread: mode === "unread",
         starred: mode === "starred",
         query: debouncedQuery || undefined,
-        limit: 300,
+        limit: pageSize,
+        offset: (page - 1) * pageSize,
       });
       setItems(res.items);
+      setTotal(res.total);
+      const visibleIds = new Set(res.items.map((item) => item.id));
+      setSelected((previous) => new Set([...previous].filter((id) => visibleIds.has(id))));
       onUnreadChange?.(res.unread);
     } catch (err) {
       setError((err as Error).message);
       setItems([]);
+      setTotal(0);
     }
-  }, [feedId, mode, debouncedQuery, onUnreadChange]);
+  }, [feedId, mode, debouncedQuery, page, pageSize, onUnreadChange]);
 
   useEffect(() => {
     void loadFeeds();
@@ -78,7 +91,10 @@ export default function ItemsView({ onUnreadChange }: { onUnreadChange?: (n: num
 
   // 搜索防抖
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedQuery(query), 350);
+    const t = setTimeout(() => {
+      setDebouncedQuery(query);
+      setPage(1);
+    }, 350);
     return () => clearTimeout(t);
   }, [query]);
 
@@ -152,6 +168,10 @@ export default function ItemsView({ onUnreadChange }: { onUnreadChange?: (n: num
   async function runTask(kind: TaskKind) {
     const ids = Array.from(selected);
     if (ids.length === 0) return;
+    if (kind === "ideate") {
+      setResearchItems((items ?? []).filter((item) => selected.has(item.id)));
+      return;
+    }
     setRunning(true);
     setError(null);
     try {
@@ -166,13 +186,19 @@ export default function ItemsView({ onUnreadChange }: { onUnreadChange?: (n: num
   }
 
   const selectedCount = selected.size;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const pageNumbers = useMemo(() => {
+    const count = Math.min(totalPages, 5);
+    const start = Math.min(Math.max(page - 2, 1), Math.max(totalPages - count + 1, 1));
+    return Array.from({ length: count }, (_, index) => start + index);
+  }, [page, totalPages]);
   const feedName = useMemo(
     () => (feedId ? feeds.find((f) => f.id === feedId)?.title ?? "" : ""),
     [feedId, feeds],
   );
 
   return (
-    <div className="fade-in">
+    <div className={`items-view fade-in${selectedCount > 0 ? " items-view--selecting" : ""}`}>
       {/* 工具条 */}
       <div className="toolbar">
         <div className="seg">
@@ -186,14 +212,24 @@ export default function ItemsView({ onUnreadChange }: { onUnreadChange?: (n: num
             <button
               key={m}
               className={`seg__btn${mode === m ? " seg__btn--active" : ""}`}
-              onClick={() => setMode(m)}
+              onClick={() => {
+                setMode(m);
+                setPage(1);
+              }}
             >
               {label}
             </button>
           ))}
         </div>
 
-        <select className="select" value={feedId} onChange={(e) => setFeedId(e.target.value)}>
+        <select
+          className="select"
+          value={feedId}
+          onChange={(e) => {
+            setFeedId(e.target.value);
+            setPage(1);
+          }}
+        >
           <option value="">全部来源</option>
           {feeds.map((f) => (
             <option key={f.id} value={f.id}>
@@ -234,10 +270,15 @@ export default function ItemsView({ onUnreadChange }: { onUnreadChange?: (n: num
           }
         />
       ) : (
+        <>
         <div className="items">
           {/* 全选 */}
-          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 4px 2px" }}>
-            <Checkbox checked={allVisibleSelected} onChange={toggleSelectAll} />
+          <div className="items__select-all">
+            <Checkbox
+              checked={allVisibleSelected}
+              onChange={toggleSelectAll}
+              label={allVisibleSelected ? "取消全选当前列表" : "全选当前列表"}
+            />
             <span className="topbar__hint">全选当前列表</span>
           </div>
 
@@ -247,25 +288,22 @@ export default function ItemsView({ onUnreadChange }: { onUnreadChange?: (n: num
             return (
               <div
                 key={item.id}
-                className={`item${item.isRead ? " item--read" : " item--unread"}`}
+                className={`item${item.isRead ? " item--read" : " item--unread"}${isSel ? " item--selected" : ""}`}
               >
                 <div className="item__head">
                   <div className="item__check">
-                    <Checkbox checked={isSel} onChange={() => toggleSelect(item.id)} />
+                    <Checkbox
+                      checked={isSel}
+                      onChange={() => toggleSelect(item.id)}
+                      label={isSel ? `取消选择：${item.title}` : `选择：${item.title}`}
+                    />
                   </div>
 
                   <div className="item__main">
                     <button
                       className="item__title"
-                      style={{
-                        background: "none",
-                        border: "none",
-                        padding: 0,
-                        textAlign: "left",
-                        width: "100%",
-                        cursor: "pointer",
-                      }}
                       onClick={() => toggleExpand(item.id)}
+                      aria-expanded={isExpanded}
                     >
                       {item.title}
                     </button>
@@ -323,6 +361,51 @@ export default function ItemsView({ onUnreadChange }: { onUnreadChange?: (n: num
             );
           })}
         </div>
+        <nav className="pagination" aria-label="信息流分页">
+          <span className="pagination__summary">
+            第 {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, total)} 条，共 {total} 条
+          </span>
+          <div className="pagination__pages">
+            <button
+              className="btn btn--ghost btn--sm"
+              disabled={page === 1}
+              onClick={() => setPage((current) => Math.max(current - 1, 1))}
+            >
+              <CaretLeft size={14} />上一页
+            </button>
+            {pageNumbers.map((pageNumber) => (
+              <button
+                key={pageNumber}
+                className={`pagination__page${pageNumber === page ? " pagination__page--active" : ""}`}
+                aria-current={pageNumber === page ? "page" : undefined}
+                onClick={() => setPage(pageNumber)}
+              >
+                {pageNumber}
+              </button>
+            ))}
+            <button
+              className="btn btn--ghost btn--sm"
+              disabled={page >= totalPages}
+              onClick={() => setPage((current) => Math.min(current + 1, totalPages))}
+            >
+              下一页<CaretRight size={14} />
+            </button>
+          </div>
+          <label className="pagination__size">
+            每页
+            <select
+              className="select"
+              value={pageSize}
+              onChange={(event) => {
+                setPageSize(Number(event.target.value));
+                setPage(1);
+              }}
+            >
+              {PAGE_SIZE_OPTIONS.map((size) => <option key={size} value={size}>{size} 条</option>)}
+            </select>
+          </label>
+        </nav>
+        </>
       )}
 
       {/* 选择工具条 */}
@@ -356,6 +439,14 @@ export default function ItemsView({ onUnreadChange }: { onUnreadChange?: (n: num
           onFinished={() => {
             /* 完成后刷新列表（如摘要等不影响条目，可留空） */
           }}
+        />
+      )}
+      {researchItems && (
+        <ResearchWorkspace
+          itemIds={researchItems.map((item) => item.id)}
+          seedItems={researchItems}
+          onClose={() => setResearchItems(null)}
+          onTopicsCreated={() => setSelected(new Set())}
         />
       )}
     </div>

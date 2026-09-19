@@ -11,8 +11,13 @@ const EVENT_TYPES = [
   "task_status",
   "task_delta",
   "task_thinking",
+  "task_trace",
+  "research_message",
+  "research_revision",
+  "profile_memory_candidate",
   "task_done",
   "task_error",
+  "tasks_deleted",
   "topics_created",
 ] as const;
 

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { CaretDown, CaretUp, CheckCircle, X, XCircle } from "@phosphor-icons/react";
 import { onEvent } from "../lib/sse";
 import { kindLabel, languageLabel, statusLabel, timeAgo } from "../lib/format";
@@ -157,7 +158,28 @@ export default function TaskLiveModal({
 
   const finishedRef = useRef(initial.status === "done" || initial.status === "error");
   const onFinishedRef = useRef(onFinished);
+  const onCloseRef = useRef(onClose);
+  const dialogRef = useRef<HTMLDivElement>(null);
   onFinishedRef.current = onFinished;
+  onCloseRef.current = onClose;
+
+  useEffect(() => {
+    const previouslyFocused = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    document.body.classList.add("modal-open");
+    dialogRef.current?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onCloseRef.current();
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.body.classList.remove("modal-open");
+      previouslyFocused?.focus();
+    };
+  }, []);
 
   useEffect(() => {
     if (finishedRef.current) return;
@@ -199,14 +221,22 @@ export default function TaskLiveModal({
   const parsed = task.output?.parsed ?? null;
   const status = task.status;
 
-  return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+  return createPortal(
+    <div className="modal-backdrop" onClick={onClose} role="presentation">
+      <div
+        ref={dialogRef}
+        className="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={`task-modal-title-${task.id}`}
+        tabIndex={-1}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="modal__head">
           <Tag color={status === "done" ? "green" : status === "error" ? "red" : "ink"}>
             {kindLabel(task.kind)}
           </Tag>
-          <span className="modal__title">AI 任务</span>
+          <span className="modal__title" id={`task-modal-title-${task.id}`}>AI 任务</span>
           {status === "running" || status === "queued" ? (
             <StatusDot state="run" />
           ) : status === "done" ? (
@@ -214,7 +244,7 @@ export default function TaskLiveModal({
           ) : status === "error" ? (
             <StatusDot state="err" />
           ) : null}
-          <button className="btn btn--icon" onClick={onClose} title="关闭">
+          <button className="btn btn--icon" onClick={onClose} title="关闭" aria-label="关闭任务窗口">
             <X size={16} />
           </button>
         </div>
@@ -289,6 +319,7 @@ export default function TaskLiveModal({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

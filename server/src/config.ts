@@ -10,6 +10,21 @@ export const WORKBENCH_HOME = process.env.WORKBENCH_HOME || join(homedir(), ".wo
 
 export const DB_PATH = join(WORKBENCH_HOME, "workbench.db");
 
+/** 工作台专用的 Pi 认证文件；与全局 ~/.pi 配置隔离 */
+export const PI_AUTH_PATH = join(WORKBENCH_HOME, "pi-auth.json");
+
+/** Pi 默认供应商与模型选择 */
+export const PI_SETTINGS_PATH = join(WORKBENCH_HOME, "pi-settings.json");
+
+/** 可命名的多模型配置（含本机密钥，文件权限为 0600） */
+export const MODEL_PROFILES_PATH = join(WORKBENCH_HOME, "model-profiles.json");
+
+/** 可由前端编辑的任务提示词 */
+export const PI_PROMPTS_PATH = join(WORKBENCH_HOME, "pi-prompts.json");
+
+/** 持久化的 Pi 研究会话目录 */
+export const PI_SESSIONS_DIR = join(WORKBENCH_HOME, "pi-sessions");
+
 /** 服务端口 */
 export const PORT = Number(process.env.WORKBENCH_PORT || 3001);
 

@@ -1,0 +1,574 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pi Agent 持续对话与创作者记忆实施计划</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --page: #f6f8fb;
+      --paper: #ffffff;
+      --ink: #111827;
+      --muted: #4b5563;
+      --line: #d1d5db;
+      --accent: #2563eb;
+      --accent-soft: #eff6ff;
+      --code-bg: #111827;
+      --code-ink: #f9fafb;
+      --success: #166534;
+      --success-soft: #f0fdf4;
+      --warning: #92400e;
+      --warning-soft: #fffbeb;
+    }
+
+    * { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      background: var(--page);
+      color: var(--ink);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 16px;
+      line-height: 1.65;
+    }
+
+    .page {
+      width: min(1040px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 32px 0 48px;
+    }
+
+    header,
+    nav,
+    section,
+    footer {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--paper);
+      padding: 24px;
+    }
+
+    header { margin-bottom: 16px; }
+    nav { margin-bottom: 16px; }
+    main { display: grid; gap: 16px; }
+    footer { margin-top: 16px; }
+
+    h1,
+    h2,
+    h3,
+    p { margin: 0; }
+
+    h1 {
+      font-size: 36px;
+      line-height: 1.15;
+    }
+
+    h2 {
+      margin-bottom: 12px;
+      font-size: 24px;
+    }
+
+    h3 {
+      margin: 18px 0 8px;
+      font-size: 18px;
+    }
+
+    p,
+    li,
+    td { color: var(--muted); }
+
+    ul,
+    ol { margin: 8px 0 0; padding-left: 22px; }
+    li + li { margin-top: 5px; }
+    a { color: var(--accent); }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 18px;
+      margin-top: 14px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .toc {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px 20px;
+      margin: 0;
+      padding-left: 20px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    th,
+    td {
+      border-bottom: 1px solid var(--line);
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: var(--accent-soft);
+      color: var(--ink);
+    }
+
+    tr:last-child td { border-bottom: 0; }
+
+    code {
+      border-radius: 4px;
+      background: var(--accent-soft);
+      color: var(--ink);
+      padding: 2px 5px;
+    }
+
+    pre {
+      overflow: auto;
+      border-radius: 8px;
+      background: var(--code-bg);
+      color: var(--code-ink);
+      padding: 16px;
+      line-height: 1.5;
+    }
+
+    pre code {
+      background: transparent;
+      color: inherit;
+      padding: 0;
+    }
+
+    .callout {
+      margin-top: 14px;
+      border-left: 4px solid var(--accent);
+      border-radius: 8px;
+      background: var(--accent-soft);
+      padding: 14px 16px;
+    }
+
+    .callout strong { color: var(--ink); }
+    .callout--warning { border-color: var(--warning); background: var(--warning-soft); }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .card h3 { margin-top: 0; }
+
+    .status {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 2px 8px;
+      background: var(--success-soft);
+      color: var(--success);
+      font-size: 13px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .status--planned { background: var(--accent-soft); color: var(--accent); }
+
+    .flow {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .flow span {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--paper);
+      padding: 7px 10px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .flow b { color: var(--accent); }
+
+    @media (max-width: 720px) {
+      h1 { font-size: 29px; }
+      .toc,
+      .grid { grid-template-columns: 1fr; }
+      header,
+      nav,
+      section,
+      footer { padding: 18px; }
+      table { display: block; overflow-x: auto; }
+    }
+
+    @media print {
+      body { background: #fff; }
+      .page { width: 100%; padding: 0; }
+      header,
+      nav,
+      section,
+      footer { box-shadow: none; }
+      section,
+      article,
+      table { break-inside: avoid; }
+      a { color: var(--ink); text-decoration: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header>
+      <h1>Pi Agent 持续对话与创作者记忆实施计划</h1>
+      <p style="margin-top: 12px;">面向 yunn-workbench 的下一阶段实施方案：让选题研究任务可被实时纠偏、完成后可继续追问，并让 Agent 在用户可控的前提下长期理解创作者。</p>
+      <div class="meta">
+        <span><strong>范围：</strong>持续对话与任务纠偏、创作者画像与长期记忆</span>
+        <span><strong>建议周期：</strong>8–10 个开发日</span>
+        <span><strong>实施状态：</strong><span class="status">MVP 已实现，待真实模型验收</span></span>
+        <span><strong>更新日期：</strong>2026-09-19</span>
+      </div>
+    </header>
+
+    <nav aria-label="目录">
+      <h2>目录</h2>
+      <ol class="toc">
+        <li><a href="#overview">概述与原则</a></li>
+        <li><a href="#scope">目标与非目标</a></li>
+        <li><a href="#architecture">目标架构</a></li>
+        <li><a href="#memory">创作者画像与记忆</a></li>
+        <li><a href="#conversation">持续对话与纠偏</a></li>
+        <li><a href="#implementation">实施阶段</a></li>
+        <li><a href="#testing">测试与验收</a></li>
+        <li><a href="#risks">风险、回滚与决策</a></li>
+      </ol>
+    </nav>
+
+    <main>
+      <section id="overview">
+        <h2>1. 概述与实施原则</h2>
+        <p>当前研究任务使用 <code>SessionManager.inMemory()</code>，首轮输出完成后立即销毁 Session；前端只能停止或重新发起任务。下一阶段将研究任务升级为有生命周期的 Pi Session，并新增本地创作者画像和可审核的长期记忆。</p>
+        <div class="callout">
+          <strong>推荐顺序：</strong>先建立画像与记忆的数据基础，再改造持续会话。这样首次创建持久化 Session 时即可注入稳定、可追踪的创作者上下文，避免后续重复迁移。
+        </div>
+        <div class="grid">
+          <article class="card">
+            <h3>产品原则</h3>
+            <ul>
+              <li>用户始终知道 Agent 记住了什么。</li>
+              <li>用户可以编辑、停用或删除任何长期记忆。</li>
+              <li>纠偏消息不丢失，并明确显示排队、已送达或失败。</li>
+              <li>行动轨迹只展示工具与结果摘要，不展示隐藏思维链。</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>工程原则</h3>
+            <ul>
+              <li>SQLite 是业务状态的唯一事实来源。</li>
+              <li>Pi JSONL Session 保存模型上下文，数据库保存可查询的产品记录。</li>
+              <li>所有 schema 变更采用向前兼容迁移。</li>
+              <li>保留现有一次性摘要、评估、聚类流程。</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section id="scope">
+        <h2>2. 目标与非目标</h2>
+        <h3>本期目标</h3>
+        <ul>
+          <li>研究运行中支持“立即纠偏”和“本轮结束后继续”两种输入。</li>
+          <li>研究完成后可继续追问，不必丢弃工具上下文或重新读取全部素材。</li>
+          <li>服务重启后可以恢复研究会话并查看完整消息、轨迹和候选版本。</li>
+          <li>提供单一创作者画像，覆盖领域、受众、目标、表达风格、禁区和输出偏好。</li>
+          <li>保存经过用户确认的长期记忆；支持查看、编辑、停用和删除。</li>
+          <li>每轮候选选题形成版本，确认写入时明确关联版本。</li>
+        </ul>
+        <h3>本期非目标</h3>
+        <ul>
+          <li>不接入互联网搜索、向量数据库或多用户账户系统。</li>
+          <li>不让模型在未经确认时自动形成永久记忆。</li>
+          <li>不实现多个研究任务并行运行；继续沿用单队列执行策略。</li>
+          <li>不扩展到自动写文章、发布内容或桌面应用打包。</li>
+        </ul>
+      </section>
+
+      <section id="architecture">
+        <h2>3. 目标架构</h2>
+        <div class="flow" aria-label="目标架构数据流">
+          <span>研究工作台</span><b>→</b>
+          <span>消息与画像 API</span><b>→</b>
+          <span>ResearchSessionController</span><b>→</b>
+          <span>Pi 持久化 Session</span><b>→</b>
+          <span>研究工具</span>
+        </div>
+        <div class="flow" aria-label="持久化数据流">
+          <span>SQLite：任务、消息、画像、记忆、候选版本</span><b>+</b>
+          <span><code>WORKBENCH_HOME/pi-sessions/</code>：Pi JSONL 上下文</span>
+        </div>
+
+        <h3>服务端模块调整</h3>
+        <table>
+          <thead><tr><th>模块</th><th>改动</th><th>职责边界</th></tr></thead>
+          <tbody>
+            <tr><td><code>server/src/agent.ts</code></td><td>抽离研究会话控制逻辑</td><td>保留普通任务队列；研究任务交给控制器管理多轮生命周期。</td></tr>
+            <tr><td><code>server/src/research-session.ts</code></td><td>新增</td><td>创建、恢复、缓存、纠偏、续问、停止和释放 Pi Session。</td></tr>
+            <tr><td><code>server/src/creator-profile.ts</code></td><td>新增</td><td>画像校验、记忆筛选、Prompt 上下文组装与版本快照。</td></tr>
+            <tr><td><code>server/src/db.ts</code></td><td>扩展</td><td>新增画像、记忆、消息、候选版本表及迁移。</td></tr>
+            <tr><td><code>server/src/http.ts</code></td><td>扩展</td><td>暴露画像、记忆、会话消息和最终确认 API。</td></tr>
+            <tr><td><code>server/src/config.ts</code></td><td>扩展</td><td>增加 <code>PI_SESSIONS_DIR</code>。</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Session 生命周期</h3>
+        <ol>
+          <li>启动研究时用 <code>SessionManager.create(cwd, PI_SESSIONS_DIR)</code> 创建持久化会话，将 Session 文件路径和 ID 写入任务。</li>
+          <li>任务运行期间把 <code>AgentSession</code> 保存在活动注册表；HTTP 请求可调用 <code>session.steer()</code> 或 <code>session.followUp()</code>。</li>
+          <li>一轮结束后任务进入 <code>awaiting_feedback</code>，Session 保留短期缓存；超时后释放内存，但不删除 JSONL。</li>
+          <li>后续追问时用 <code>SessionManager.open()</code> 恢复上下文，再发送新的用户消息。</li>
+          <li>用户点击“结束研究”后进入 <code>completed</code>；候选仍可查看和确认，但不能继续写入该 Session。</li>
+        </ol>
+      </section>
+
+      <section id="memory">
+        <h2>4. 创作者画像与长期记忆</h2>
+        <h3>数据模型</h3>
+        <table>
+          <thead><tr><th>表</th><th>关键字段</th><th>说明</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><code>creator_profiles</code></td>
+              <td><code>id</code>, <code>name</code>, <code>domains</code>, <code>audience</code>, <code>goals</code>, <code>tone</code>, <code>avoid_topics</code>, <code>output_preferences</code>, <code>version</code>, timestamps</td>
+              <td>MVP 使用固定 ID <code>default</code>；数组和结构化偏好存 JSON。</td>
+            </tr>
+            <tr>
+              <td><code>memory_facts</code></td>
+              <td><code>id</code>, <code>category</code>, <code>content</code>, <code>status</code>, <code>source_type</code>, <code>source_id</code>, <code>confidence</code>, timestamps</td>
+              <td>状态为 <code>candidate</code>、<code>active</code>、<code>disabled</code>；只有 active 注入上下文。</td>
+            </tr>
+            <tr>
+              <td><code>task_profile_snapshots</code></td>
+              <td><code>task_id</code>, <code>profile_version</code>, <code>snapshot</code>, <code>created_at</code></td>
+              <td>记录研究启动时使用的画像，确保任务可复现。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>画像设置界面</h3>
+        <p>在现有“Agent 设置”中增加“创作者画像”页签，采用短字段和标签输入，不直接让用户编辑整段 Prompt。</p>
+        <ul>
+          <li><strong>身份：</strong>称呼、主要创作领域、常用平台。</li>
+          <li><strong>受众：</strong>目标读者、知识水平、关注问题。</li>
+          <li><strong>目标：</strong>增长、专业影响力、产品转化或知识沉淀。</li>
+          <li><strong>表达：</strong>语气、篇幅、语言、偏好的内容结构。</li>
+          <li><strong>边界：</strong>不做的主题、不接受的表达方式、必须遵守的事实要求。</li>
+        </ul>
+
+        <h3>记忆形成机制</h3>
+        <ol>
+          <li>首版只从明确行为生成候选记忆，例如用户确认某类选题、连续拒绝某种形式，或主动输入“记住……”指令。</li>
+          <li>候选记忆进入“待确认”列表，不立即影响后续研究。</li>
+          <li>用户确认后转为 active；编辑会创建更新时间并保留来源。</li>
+          <li>Prompt 只注入画像摘要和最多 20 条相关 active 记忆，按类别、最近使用时间和置信度排序。</li>
+        </ol>
+        <div class="callout callout--warning">
+          <strong>隐私边界：</strong>画像和记忆仅保存在 <code>WORKBENCH_HOME</code>。界面必须提供“导出画像”“清空长期记忆”以及单条删除功能；删除后不再注入任何新 Session。
+        </div>
+      </section>
+
+      <section id="conversation">
+        <h2>5. 持续对话与任务纠偏</h2>
+        <h3>消息与候选版本</h3>
+        <table>
+          <thead><tr><th>表／字段</th><th>用途</th></tr></thead>
+          <tbody>
+            <tr><td><code>research_messages</code></td><td>记录用户和 Agent 的可见消息；字段包括 role、mode、content、status、created_at、delivered_at。</td></tr>
+            <tr><td><code>research_revisions</code></td><td>每次 Agent 返回合法候选 JSON 后保存一个不可变版本，包含 revision、topics、strategy 和 created_at。</td></tr>
+            <tr><td><code>tasks.session_id</code> / <code>session_path</code></td><td>关联可恢复的 Pi JSONL Session。</td></tr>
+            <tr><td><code>tasks.status</code></td><td>增加 <code>awaiting_feedback</code> 和 <code>completed</code>，区分“本轮结束”和“研究正式结束”。</td></tr>
+          </tbody>
+        </table>
+
+        <h3>两种纠偏方式</h3>
+        <div class="grid">
+          <article class="card">
+            <h3>立即纠偏（steer）</h3>
+            <p>用于方向明显错误或需要立刻改变检索重点。运行中调用 <code>session.steer(content)</code>，消息在下一次安全边界进入上下文。</p>
+            <p><strong>示例：</strong>“不要讨论写作效率，重点研究个人知识库的复利价值。”</p>
+          </article>
+          <article class="card">
+            <h3>本轮后继续（followUp）</h3>
+            <p>用于补充要求而不打断当前工具链。运行中调用 <code>session.followUp(content)</code>；空闲状态下直接触发下一轮。</p>
+            <p><strong>示例：</strong>“完成后再给我一个面向独立开发者的版本。”</p>
+          </article>
+        </div>
+
+        <h3>API 设计</h3>
+        <pre><code>GET  /api/creator-profile
+PUT  /api/creator-profile
+GET  /api/memories?status=active|candidate|disabled
+POST /api/memories
+PATCH /api/memories/:id
+DELETE /api/memories/:id
+
+GET  /api/tasks/:id/messages
+POST /api/tasks/:id/messages       { content, mode: "steer" | "follow_up" }
+POST /api/tasks/:id/finish
+GET  /api/tasks/:id/revisions
+POST /api/tasks/:id/confirm-topics { revision, indexes }</code></pre>
+
+        <h3>前端交互</h3>
+        <ul>
+          <li>研究工作台中栏合并展示工具动作和用户消息，按时间排序。</li>
+          <li>底部增加常驻输入框；发送按钮旁提供“立即纠偏 / 本轮后继续”选择。</li>
+          <li>消息显示排队、已送达、处理失败状态；失败消息允许重试。</li>
+          <li>候选区顶部增加版本选择器，默认展示最新版本，旧版本只读。</li>
+          <li>“停止”仍用于中止当前运行；新增“结束研究”用于关闭整个会话。</li>
+          <li>重新打开历史任务时恢复消息、轨迹、当前候选版本和 Session 状态。</li>
+        </ul>
+
+        <h3>SSE 事件</h3>
+        <p>新增 <code>research_message</code>、<code>research_revision</code>、<code>research_queue</code> 和 <code>profile_memory_candidate</code>。断线重连后仍以 REST 获取完整状态，SSE 只负责增量刷新。</p>
+      </section>
+
+      <section id="implementation">
+        <h2>6. 实施阶段与里程碑</h2>
+        <table>
+          <thead><tr><th>阶段</th><th>预计</th><th>主要工作</th><th>完成标准</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><strong>P0 数据基础</strong></td>
+              <td>1 天</td>
+              <td>新增表与字段、迁移函数、DB 类型、配置路径；为 Session 和业务消息建立关联。</td>
+              <td>旧数据库启动无损；新表可 CRUD；旧任务仍能读取。</td>
+            </tr>
+            <tr>
+              <td><strong>P1 创作者画像</strong></td>
+              <td>2 天</td>
+              <td>画像 API、设置界面、Prompt 摘要生成、任务画像快照。</td>
+              <td>新研究明确显示所用画像版本；编辑画像只影响新任务。</td>
+            </tr>
+            <tr>
+              <td><strong>P2 长期记忆</strong></td>
+              <td>1–2 天</td>
+              <td>记忆 CRUD、候选确认、禁用/删除、上下文筛选与注入。</td>
+              <td>未经确认的记忆不影响输出；删除后新 Session 不再出现。</td>
+            </tr>
+            <tr>
+              <td><strong>P3 持久化会话</strong></td>
+              <td>2 天</td>
+              <td>ResearchSessionController、SessionManager.create/open、状态机、候选版本。</td>
+              <td>首轮完成后可续问；重启服务后可恢复同一上下文。</td>
+            </tr>
+            <tr>
+              <td><strong>P4 实时纠偏 UI</strong></td>
+              <td>1–2 天</td>
+              <td>消息输入、steer/followUp、队列状态、时间线合并、版本选择。</td>
+              <td>运行中两种发送方式均可见、可追踪且不丢消息。</td>
+            </tr>
+            <tr>
+              <td><strong>P5 稳定性与收尾</strong></td>
+              <td>1 天</td>
+              <td>异常恢复、限制、导出/清空、手工回归和文档更新。</td>
+              <td>全部验收场景通过；失败不会损坏任务或画像数据。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>文件级任务清单</h3>
+        <ul>
+          <li><code>server/src/db.ts</code>：迁移、画像、记忆、消息、Revision 读写函数。</li>
+          <li><code>server/src/research-session.ts</code>：封装 Session 生命周期和并发保护。</li>
+          <li><code>server/src/agent.ts</code>：普通任务与研究任务分流，去除研究 Session 的立即销毁逻辑。</li>
+          <li><code>server/src/prompts.ts</code>：增加 <code>{{creatorProfile}}</code> 和 <code>{{memories}}</code>，保持前端可配置。</li>
+          <li><code>web/src/components/ResearchWorkspace.tsx</code>：加入消息流、输入区、版本和结束状态。</li>
+          <li><code>web/src/components/CreatorProfileSettings.tsx</code>：新增画像与记忆管理。</li>
+          <li><code>web/src/lib/api.ts</code>、<code>types.ts</code>、<code>sse.ts</code>：同步 API、状态和事件类型。</li>
+        </ul>
+      </section>
+
+      <section id="testing">
+        <h2>7. 测试与验收</h2>
+        <h3>自动化测试建议</h3>
+        <ul>
+          <li>在 server 引入 Vitest，并为数据库迁移、画像校验、记忆状态转换和消息状态机编写 <code>*.test.ts</code>。</li>
+          <li>通过可替换的 Pi Session adapter 测试 steer、followUp、恢复和异常，不依赖真实 API Key。</li>
+          <li>所有测试使用临时 <code>WORKBENCH_HOME</code>，禁止触碰默认数据库。</li>
+        </ul>
+
+        <h3>核心验收场景</h3>
+        <table>
+          <thead><tr><th>编号</th><th>场景</th><th>预期</th></tr></thead>
+          <tbody>
+            <tr><td>A1</td><td>运行中发送“立即纠偏”</td><td>消息进入 Pi steer 队列，状态可见，后续工具检索方向发生变化。</td></tr>
+            <tr><td>A2</td><td>运行中发送“本轮后继续”</td><td>当前工具链不中断，完成后自动进入下一轮。</td></tr>
+            <tr><td>A3</td><td>首轮完成后继续追问</td><td>Agent 能引用前序素材与工具结果，无需重新开始研究。</td></tr>
+            <tr><td>A4</td><td>服务重启后恢复任务</td><td>消息、轨迹、Session 和候选版本可恢复，继续发送成功。</td></tr>
+            <tr><td>A5</td><td>创建画像并启动任务</td><td>任务保存画像快照，输出明显遵循目标受众和风格偏好。</td></tr>
+            <tr><td>A6</td><td>模型提出候选记忆</td><td>未确认前不注入；确认后出现在记忆列表并影响新任务。</td></tr>
+            <tr><td>A7</td><td>删除或禁用记忆</td><td>新任务不再注入；历史任务快照保持可审计。</td></tr>
+            <tr><td>A8</td><td>从旧 Revision 确认选题</td><td>写入内容与指定版本一致，并保持幂等。</td></tr>
+          </tbody>
+        </table>
+
+        <h3>交付前命令</h3>
+        <pre><code>cd server &amp;&amp; npm exec -- tsc --noEmit
+cd .. &amp;&amp; npm run build:web
+git diff --check</code></pre>
+      </section>
+
+      <section id="risks">
+        <h2>8. 风险、回滚与待决策项</h2>
+        <table>
+          <thead><tr><th>风险</th><th>影响</th><th>缓解措施</th></tr></thead>
+          <tbody>
+            <tr><td>长会话导致上下文和成本持续增长</td><td>延迟增加、超出模型限制</td><td>启用 Pi compaction；界面显示轮次与用量；设置单任务最大轮次。</td></tr>
+            <tr><td>steer 与工具结束事件竞态</td><td>消息状态错误或重复投递</td><td>消息使用数据库 ID 和状态机；控制器串行更新；发送接口幂等。</td></tr>
+            <tr><td>模型学习出错误偏好</td><td>长期污染后续结果</td><td>只生成候选记忆，必须人工确认；支持停用和删除。</td></tr>
+            <tr><td>SQLite 与 Pi JSONL 状态不一致</td><td>任务无法继续</td><td>以 SQLite 记录 Session path 和最后确认轮次；打开失败时保留历史并提供“从快照新建会话”。</td></tr>
+            <tr><td>Prompt 注入内容过多</td><td>稀释当前任务目标</td><td>画像生成短摘要；长期记忆限制数量和总字符数。</td></tr>
+          </tbody>
+        </table>
+
+        <h3>回滚策略</h3>
+        <ul>
+          <li>新表和新增列不删除旧数据；关闭功能开关后仍可使用当前一次性研究流程。</li>
+          <li>Session 恢复失败只影响继续对话，不影响已保存的任务输出和选题。</li>
+          <li>画像注入保留总开关；异常时可立即停止注入而无需删除用户数据。</li>
+        </ul>
+
+        <h3>实施前需要确认的产品决策</h3>
+        <ol>
+          <li><strong>记忆确认入口：</strong>推荐在 Agent 设置中集中审核，同时在研究完成后显示待确认提示。</li>
+          <li><strong>画像生效规则：</strong>推荐任务启动时冻结快照；修改画像不改变正在运行的任务。</li>
+          <li><strong>会话结束规则：</strong>推荐显式“结束研究”，另加 30 分钟内存缓存；磁盘 Session 长期保留。</li>
+          <li><strong>首版限制：</strong>推荐单任务最多 12 轮、单条纠偏 2,000 字、活动记忆最多注入 20 条。</li>
+        </ol>
+      </section>
+    </main>
+
+    <footer>
+      <h2>9. 下一步行动</h2>
+      <ol>
+        <li>确认第 8 节四项产品决策；若无调整，采用文档中的推荐值。</li>
+        <li>从 P0 数据迁移和 P1 创作者画像开始实现。</li>
+        <li>P1 完成后先进行一次真实研究对比，再进入持久化会话改造。</li>
+        <li>P4 完成后用真实 API Key 验证 steer 与 followUp 的模型兼容性。</li>
+      </ol>
+    </footer>
+  </div>
+</body>
+</html>

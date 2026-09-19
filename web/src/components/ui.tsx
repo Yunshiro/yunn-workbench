@@ -33,22 +33,28 @@ export function Tag({
 export function Checkbox({
   checked,
   onChange,
+  label,
+  disabled = false,
 }: {
   checked: boolean;
   onChange: (v: boolean) => void;
+  label?: string;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       role="checkbox"
       aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
       className={`checkbox${checked ? " checkbox--on" : ""}`}
       onClick={(e) => {
         e.stopPropagation();
         onChange(!checked);
       }}
     >
-      {checked && <Check size={11} weight="bold" />}
+      {checked && <Check size={12} weight="bold" aria-hidden="true" />}
     </button>
   );
 }

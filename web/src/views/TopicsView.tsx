@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Lightbulb, Trash } from "@phosphor-icons/react";
+import { Lightbulb, NotePencil, Trash } from "@phosphor-icons/react";
 import { api } from "../lib/api";
 import { useEvent } from "../lib/sse";
 import { languageLabel, statusLabel, timeAgo } from "../lib/format";
@@ -10,7 +10,7 @@ type Filter = "all" | TopicStatus;
 
 const STATUS_OPTIONS: TopicStatus[] = ["new", "writing", "done", "discarded"];
 
-export default function TopicsView() {
+export default function TopicsView({ onCreateDraft }: { onCreateDraft: (topicId: string) => void }) {
   const [topics, setTopics] = useState<Topic[] | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
   const [error, setError] = useState<string | null>(null);
@@ -136,6 +136,10 @@ export default function TopicsView() {
               )}
 
               <div className="topic__foot">
+                <button className="btn" onClick={() => onCreateDraft(topic.id)}>
+                  <NotePencil size={15} />
+                  {topic.draftCount > 0 ? `草稿 ${topic.draftCount}` : "写推文"}
+                </button>
                 <span className="topbar__hint">状态</span>
                 <select
                   className="select topic__status"
