@@ -58,6 +58,30 @@ jobs:
       - name: Build unsigned installers
         run: npm run make:desktop
 
+      - name: Verify macOS package launches
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          app_path="$(find desktop/out -maxdepth 2 -type d -name 'Yunn Workbench.app' -print -quit)"
+          test -n "$app_path"
+          codesign --verify --deep --strict --verbose=4 "$app_path"
+
+          log_path="$RUNNER_TEMP/yunn-workbench-launch.log"
+          "$app_path/Contents/MacOS/Yunn Workbench" > "$log_path" 2>&1 &
+          app_pid=$!
+          cleanup() {
+            kill "$app_pid" 2>/dev/null || true
+            wait "$app_pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+          sleep 8
+          if ! kill -0 "$app_pid" 2>/dev/null; then
+            echo "Yunn Workbench exited during launch smoke test"
+            cat "$log_path"
+            exit 1
+          fi
+
       - name: Upload installers
         uses: actions/upload-artifact@v4
         with:

@@ -37,7 +37,7 @@ Yunn Workbench 希望把内容创作者日常使用的多种工具收进同一�
 
 ## 下载桌面版
 
-当前版本：[Yunn Workbench v0.1.0 Beta 1](https://github.com/Yunshiro/yunn-workbench/releases/tag/v0.1.0-beta.1)
+当前版本：[Yunn Workbench v0.1.0 Beta 3](https://github.com/Yunshiro/yunn-workbench/releases/tag/v0.1.0-beta.3)
 
 所有版本：[GitHub Releases](https://github.com/Yunshiro/yunn-workbench/releases)
 
@@ -50,7 +50,7 @@ Yunn Workbench 希望把内容创作者日常使用的多种工具收进同一�
 
 当前安装包支持 Apple Silicon，即 M1、M2、M3、M4 等芯片。
 
-1. 在 Release 的 **Assets** 区域下载 `Yunn-Workbench-0.1.0-beta.1-macOS-arm64.dmg`。
+1. 在 Release 的 **Assets** 区域下载 `Yunn-Workbench-0.1.0-beta.3-macOS-arm64.dmg`。
 2. 双击打开 DMG，将 **Yunn Workbench** 拖入 **Applications（应用程序）** 文件夹。
 3. 打开 Finder，进入“应用程序”，找到 **Yunn Workbench**。
 4. 首次启动时右键应用并选择“打开”，然后在系统提示中再次确认“打开”。
@@ -69,7 +69,7 @@ xattr -dr com.apple.quarantine "/Applications/Yunn Workbench.app"
 
 当前安装包支持 Windows x64。
 
-1. 在 Release 的 **Assets** 区域下载 `Yunn-Workbench-0.1.0-beta.1-Windows-x64-Setup.exe`。
+1. 在 Release 的 **Assets** 区域下载 `Yunn-Workbench-0.1.0-beta.3-Windows-x64-Setup.exe`。
 2. 双击运行安装程序。
 3. 如果 Windows SmartScreen 显示保护提示，点击“更多信息”，确认文件来自本仓库后选择“仍要运行”。
 4. 安装完成后，从开始菜单或桌面快捷方式启动 **Yunn Workbench**。
@@ -81,13 +81,13 @@ Release 中同时提供 `SHA256SUMS.txt`。可以用它确认安装包在下载�
 macOS：
 
 ```bash
-shasum -a 256 Yunn-Workbench-0.1.0-beta.1-macOS-arm64.dmg
+shasum -a 256 Yunn-Workbench-0.1.0-beta.3-macOS-arm64.dmg
 ```
 
 Windows PowerShell：
 
 ```powershell
-Get-FileHash .\Yunn-Workbench-0.1.0-beta.1-Windows-x64-Setup.exe -Algorithm SHA256
+Get-FileHash .\Yunn-Workbench-0.1.0-beta.3-Windows-x64-Setup.exe -Algorithm SHA256
 ```
 
 将命令输出与 `SHA256SUMS.txt` 中对应文件的值进行比较。
