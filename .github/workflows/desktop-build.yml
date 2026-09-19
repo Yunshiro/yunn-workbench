@@ -1,0 +1,60 @@
+name: Build unsigned desktop apps
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ${{ matrix.name }} installer
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS
+            os: macos-latest
+            artifact: macos
+          - name: Windows
+            os: windows-latest
+            artifact: windows
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            server/package-lock.json
+            web/package-lock.json
+            desktop/package-lock.json
+
+      - name: Install server dependencies
+        run: npm ci --prefix server
+
+      - name: Install web dependencies
+        run: npm ci --prefix web
+
+      - name: Install desktop dependencies
+        run: npm ci --prefix desktop
+
+      - name: Build unsigned installers
+        run: npm run make:desktop
+
+      - name: Upload installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: yunn-workbench-${{ matrix.artifact }}-${{ github.ref_name }}
+          path: desktop/out/make/**/*
+          if-no-files-found: error
+          retention-days: 14
