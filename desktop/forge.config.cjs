@@ -1,8 +1,12 @@
+const path = require("node:path");
+
+const iconPath = path.join(__dirname, "assets", process.platform === "win32" ? "icon.ico" : "icon.icns");
+
 module.exports = {
   packagerConfig: {
     asar: true,
     appBundleId: "com.yunshiro.yunn-workbench",
-    executableName: "yunn-workbench",
+    icon: iconPath,
   },
   rebuildConfig: {},
   makers: [
@@ -22,6 +26,7 @@ module.exports = {
       config: {
         name: "yunn_workbench",
         setupExe: "Yunn-Workbench-Setup.exe",
+        setupIcon: path.join(__dirname, "assets", "icon.ico"),
       },
     },
   ],

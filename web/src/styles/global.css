@@ -1,5 +1,5 @@
 /* ============================================================
-   信息工作台 · 设计系统
+   Yunn Workbench · 设计系统
    Premium utilitarian minimalism — 暖白单色 + 低饱和点缀色
    ============================================================ */
 
@@ -132,20 +132,14 @@ textarea:focus-visible {
   width: 26px;
   height: 26px;
   border-radius: var(--r-sm);
-  background: var(--ink);
-  color: #fff;
-  display: grid;
-  place-items: center;
-  font-family: var(--font-mono);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  display: block;
 }
 
 .brand__name {
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 650;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
 }
 
 .brand__sub {

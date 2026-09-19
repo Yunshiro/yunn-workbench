@@ -83,10 +83,10 @@ export default function App() {
     <div className="app">
       <aside className="sidebar">
         <div className="brand">
-          <div className="brand__mark">讯</div>
+          <img className="brand__mark" src="/icon.svg" alt="" />
           <div>
-            <div className="brand__name">信息工作台</div>
-            <div className="brand__sub">Workbench</div>
+            <div className="brand__name">Yunn Workbench</div>
+            <div className="brand__sub">AI Content Studio</div>
           </div>
         </div>
 

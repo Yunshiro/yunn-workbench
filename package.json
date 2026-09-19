@@ -1,8 +1,8 @@
 {
   "name": "pi-workbench",
-  "version": "0.1.0",
+  "version": "0.1.0-beta.1",
   "private": true,
-  "description": "信息工作台：RSS 聚合 + Pi 驱动的选题发现",
+  "description": "Yunn Workbench：RSS 聚合 + Pi 驱动的选题发现",
   "type": "module",
   "scripts": {
     "install:all": "npm --prefix server install && npm --prefix web install",
