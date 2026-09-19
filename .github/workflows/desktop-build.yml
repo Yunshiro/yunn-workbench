@@ -2,6 +2,11 @@ name: Build unsigned desktop apps
 
 on:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Optional existing v* tag to build and publish"
+        required: false
+        type: string
   push:
     tags:
       - "v*"
@@ -28,6 +33,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag || github.ref }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -54,14 +61,14 @@ jobs:
       - name: Upload installers
         uses: actions/upload-artifact@v4
         with:
-          name: yunn-workbench-${{ matrix.artifact }}-${{ github.ref_name }}
+          name: yunn-workbench-${{ matrix.artifact }}-${{ inputs.release_tag || github.ref_name }}
           path: desktop/out/make/**/*
           if-no-files-found: error
           retention-days: 14
 
   release:
     name: Publish GitHub pre-release
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.release_tag != ''
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -71,15 +78,18 @@ jobs:
       - name: Download installers
         uses: actions/download-artifact@v4
         with:
-          pattern: yunn-workbench-*-${{ github.ref_name }}
+          pattern: yunn-workbench-*-${{ inputs.release_tag || github.ref_name }}
           path: downloaded-artifacts
           merge-multiple: true
 
       - name: Prepare release assets
         shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
         run: |
           set -euo pipefail
-          version="${GITHUB_REF_NAME#v}"
+          [[ "$RELEASE_TAG" == v* ]]
+          version="${RELEASE_TAG#v}"
           mkdir -p release-assets
 
           mac_dmg="$(find downloaded-artifacts -type f -name '*.dmg' -print -quit)"
@@ -101,9 +111,10 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
         run: |
           set -euo pipefail
-          tag="$GITHUB_REF_NAME"
+          tag="$RELEASE_TAG"
 
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
             gh release upload "$tag" release-assets/* \
