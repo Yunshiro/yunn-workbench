@@ -57,6 +57,14 @@ Yunn Workbench 希望把内容创作者日常使用的多种工具收进同一�
 
 安装完成后可以推出并删除下载的 DMG。当前版本暂不提供 Intel Mac 安装包。
 
+如果确认安装包来自本仓库、SHA-256 校验一致，但 macOS 仍提示应用“已损坏”，可以在终端中仅移除该应用的下载隔离属性，然后重新打开：
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/Yunn Workbench.app"
+```
+
+不要使用关闭全局 Gatekeeper 的命令；上述命令只作用于这一个应用。
+
 ### Windows 安装
 
 当前安装包支持 Windows x64。

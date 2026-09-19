@@ -7,6 +7,12 @@ module.exports = {
     asar: true,
     appBundleId: "com.yunshiro.yunn-workbench",
     icon: iconPath,
+    osxSign: process.platform === "darwin"
+      ? {
+          identity: "-",
+          identityValidation: false,
+        }
+      : undefined,
   },
   rebuildConfig: {},
   makers: [
