@@ -6,9 +6,13 @@
   "type": "module",
   "scripts": {
     "install:all": "npm --prefix server install && npm --prefix web install",
+    "install:desktop": "npm --prefix desktop install",
     "dev:server": "npm --prefix server run dev",
     "dev:web": "npm --prefix web run dev",
     "build:web": "npm --prefix web run build",
+    "desktop": "npm --prefix desktop start",
+    "package:desktop": "npm --prefix desktop run package",
+    "make:desktop": "npm --prefix desktop run make",
     "start": "npm --prefix server run start"
   }
 }

@@ -28,8 +28,11 @@ export const PI_SESSIONS_DIR = join(WORKBENCH_HOME, "pi-sessions");
 /** 服务端口 */
 export const PORT = Number(process.env.WORKBENCH_PORT || 3001);
 
+/** 监听地址；桌面版固定使用回环地址，避免暴露到局域网 */
+export const HOST = process.env.WORKBENCH_HOST || "127.0.0.1";
+
 /** 前端构建产物目录（若存在则由后端直接托管） */
-export const WEB_DIST = join(__dirname, "..", "..", "web", "dist");
+export const WEB_DIST = process.env.WORKBENCH_WEB_DIST || join(__dirname, "..", "..", "web", "dist");
 
 /** RSS 抓取间隔（毫秒），本地工具 10 分钟一次 */
 export const FETCH_INTERVAL_MS = 10 * 60 * 1000;

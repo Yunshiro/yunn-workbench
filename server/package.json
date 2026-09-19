@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch --no-warnings src/index.ts",
+    "build": "tsc -p tsconfig.build.json",
     "start": "tsx --no-warnings src/index.ts"
   },
   "dependencies": {

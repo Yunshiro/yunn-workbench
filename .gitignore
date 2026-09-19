@@ -5,6 +5,8 @@ node_modules/
 dist/
 build/
 *.tsbuildinfo
+desktop/runtime/
+desktop/out/
 
 # 环境变量与本地配置
 .env

@@ -1,7 +1,10 @@
 import { existsSync } from "node:fs";
+import type { Server } from "node:http";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import express from "express";
 import { app } from "./http.js";
-import { FETCH_INTERVAL_MS, PORT, RETENTION_DAYS, WEB_DIST } from "./config.js";
+import { FETCH_INTERVAL_MS, HOST, PORT, RETENTION_DAYS, WEB_DIST } from "./config.js";
 import { fetchAllFeeds } from "./rss.js";
 import { pruneOldItems, listFeeds } from "./db.js";
 
@@ -48,13 +51,58 @@ async function scheduledPrune(): Promise<void> {
   }
 }
 
-setInterval(scheduledFetch, FETCH_INTERVAL_MS);
-setInterval(scheduledPrune, 24 * 60 * 60 * 1000);
+export interface WorkbenchServer {
+  server: Server;
+  url: string;
+  close: () => Promise<void>;
+}
 
-// ---- 启动 ----
-app.listen(PORT, () => {
-  console.log(`工作台后端已启动：http://localhost:${PORT}`);
+let activeServer: WorkbenchServer | null = null;
+
+/** 启动可被 CLI 与 Electron 共同复用的本地服务。 */
+export async function startWorkbenchServer(options: { port?: number; host?: string } = {}): Promise<WorkbenchServer> {
+  if (activeServer) return activeServer;
+  const port = options.port ?? PORT;
+  const host = options.host ?? HOST;
+  const server = await new Promise<Server>((resolveServer, reject) => {
+    const listeningServer = app.listen(port, host, () => resolveServer(listeningServer));
+    listeningServer.once("error", reject);
+  });
+  const address = server.address();
+  if (!address || typeof address === "string") {
+    server.close();
+    throw new Error("无法确定工作台服务端口");
+  }
+  const fetchTimer = setInterval(scheduledFetch, FETCH_INTERVAL_MS);
+  const pruneTimer = setInterval(scheduledPrune, 24 * 60 * 60 * 1000);
+  fetchTimer.unref();
+  pruneTimer.unref();
+  const url = `http://${host}:${address.port}`;
+  const runtime: WorkbenchServer = {
+    server,
+    url,
+    close: async () => {
+      clearInterval(fetchTimer);
+      clearInterval(pruneTimer);
+      server.closeAllConnections();
+      await new Promise<void>((resolveClose) => server.close(() => resolveClose()));
+      if (activeServer === runtime) activeServer = null;
+    },
+  };
+  activeServer = runtime;
+  console.log(`工作台后端已启动：${url}`);
   console.log(`数据目录：${process.env.WORKBENCH_HOME || "~/.workbench"}`);
-  // 启动后异步抓取一次（不阻塞启动）
   void scheduledFetch();
-});
+  return runtime;
+}
+
+const launchedDirectly = process.argv[1]
+  ? resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))
+  : false;
+
+if (launchedDirectly) {
+  void startWorkbenchServer().catch((error) => {
+    console.error("工作台后端启动失败：", error);
+    process.exitCode = 1;
+  });
+}

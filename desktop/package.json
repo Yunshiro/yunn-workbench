@@ -1,0 +1,31 @@
+{
+  "name": "yunn-workbench-desktop",
+  "productName": "Yunn Workbench",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Yunn Workbench desktop application",
+  "type": "module",
+  "main": "dist/main.js",
+  "scripts": {
+    "build:runtime": "npm --prefix ../web run build && npm --prefix ../server run build && tsc -p tsconfig.json && node scripts/sync-runtime.mjs",
+    "start": "npm run build:runtime && electron-forge start",
+    "package": "npm run build:runtime && electron-forge package",
+    "make": "npm run build:runtime && electron-forge make"
+  },
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "^0.85.1",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "rss-parser": "^3.13.0"
+  },
+  "devDependencies": {
+    "@electron-forge/cli": "7.11.2",
+    "@electron-forge/maker-dmg": "7.11.2",
+    "@electron-forge/maker-squirrel": "7.11.2",
+    "@electron-forge/maker-zip": "7.11.2",
+    "@electron-forge/plugin-auto-unpack-natives": "7.11.2",
+    "@types/node": "^24.0.0",
+    "electron": "44.4.3",
+    "typescript": "^5.7.2"
+  }
+}
