@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { FileText, MagnifyingGlass, Plus, Trash } from "@phosphor-icons/react";
+import { DownloadSimple, FileText, MagnifyingGlass, Plus, Trash } from "@phosphor-icons/react";
 import { api } from "../lib/api";
+import { downloadDraftMarkdown } from "../lib/draft-export";
 import { timeAgo } from "../lib/format";
 import type { Draft, DraftStatus, Topic } from "../lib/types";
 import { EmptyState, ErrorBanner, Spinner, Tag } from "../components/ui";
@@ -184,7 +185,12 @@ export default function DraftsView({ createForTopicId }: { createForTopicId?: st
                   <div className="draft-editor__eyebrow">推文草稿</div>
                   <div className={`draft-save-state draft-save-state--${saveState}`}>{saveState === "saving" ? "正在保存…" : saveState === "dirty" ? "等待保存" : "已自动保存"}</div>
                 </div>
-                <button className="btn btn--icon btn--danger" title="删除草稿" onClick={() => void remove(active)}><Trash size={16} /></button>
+                <div className="draft-editor__actions">
+                  <button className="btn btn--ghost" type="button" onClick={() => downloadDraftMarkdown(active)}>
+                    <DownloadSimple size={16} /> 导出 Markdown
+                  </button>
+                  <button className="btn btn--icon btn--danger" type="button" title="删除草稿" aria-label="删除草稿" onClick={() => void remove(active)}><Trash size={16} /></button>
+                </div>
               </div>
 
               <input className="draft-editor__title" value={active.title} onChange={(event) => edit({ title: event.target.value })} placeholder="草稿标题（仅用于管理）" />

@@ -1035,6 +1035,12 @@ textarea:focus-visible {
   margin-bottom: 20px;
 }
 
+.draft-editor__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .draft-editor__eyebrow {
   color: var(--faint);
   font-family: var(--font-mono);
