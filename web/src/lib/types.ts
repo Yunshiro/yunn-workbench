@@ -210,6 +210,64 @@ export interface AgentModelConfigInput {
 
 export type PromptKey = "system" | "common" | "summarize" | "evaluate" | "cluster" | "ideate";
 
+export type KbAuthType = "none" | "github_token" | "ssh_key";
+export type KbStatus = "pending" | "syncing" | "ready" | "error";
+
+export interface KnowledgeBase {
+  id: string;
+  name: string;
+  repoUrl: string;
+  authType: KbAuthType;
+  credentialConfigured: boolean;
+  branch: string | null;
+  status: KbStatus;
+  lastSyncedAt: number | null;
+  lastError: string | null;
+  commitSha: string | null;
+  fileCount: number;
+  chunkCount: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface KbCitation {
+  index: number;
+  path: string;
+  title: string;
+  heading: string | null;
+  excerpt: string;
+  documentId: string;
+}
+
+export interface KbSession {
+  id: string;
+  kbId: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface KbMessage {
+  id: string;
+  sessionId: string;
+  role: "user" | "assistant";
+  content: string;
+  citations: KbCitation[];
+  status: "running" | "done" | "error";
+  error: string | null;
+  createdAt: number;
+}
+
+export interface KbDocument {
+  id: string;
+  kbId: string;
+  path: string;
+  title: string;
+  content: string;
+  frontmatter: Record<string, string | string[]> | null;
+  updatedAt: number;
+}
+
 export interface PromptConfigResponse {
   prompts: Record<PromptKey, string>;
   defaults: Record<PromptKey, string>;

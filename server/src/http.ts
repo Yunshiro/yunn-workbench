@@ -77,6 +77,8 @@ import {
   savePromptInstruction,
   validatePromptTemplate,
 } from "./prompts.js";
+import { knowledgeEvents } from "./knowledge-events.js";
+import { mountKnowledgeRoutes } from "./knowledge-http.js";
 
 export const app = express();
 app.use(cors());
@@ -89,6 +91,8 @@ const wrap = (fn: (req: any, res: Response) => Promise<any> | any) => {
     });
   };
 };
+
+mountKnowledgeRoutes(app, wrap);
 
 // ---- 健康检查 / 状态 ----
 
@@ -526,3 +530,7 @@ agentEvents.on("task_done", (d) => broadcast("task_done", d));
 agentEvents.on("task_error", (d) => broadcast("task_error", d));
 agentEvents.on("tasks_deleted", (d) => broadcast("tasks_deleted", d));
 agentEvents.on("topics_created", (d) => broadcast("topics_created", d));
+knowledgeEvents.on("kb_status", (d) => broadcast("kb_status", d));
+knowledgeEvents.on("kb_deleted", (d) => broadcast("kb_deleted", d));
+knowledgeEvents.on("kb_message", (d) => broadcast("kb_message", d));
+knowledgeEvents.on("kb_message_delta", (d) => broadcast("kb_message_delta", d));
