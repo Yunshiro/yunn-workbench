@@ -25,6 +25,18 @@ export const PI_PROMPTS_PATH = join(WORKBENCH_HOME, "pi-prompts.json");
 /** 持久化的 Pi 研究会话目录 */
 export const PI_SESSIONS_DIR = join(WORKBENCH_HOME, "pi-sessions");
 
+/** 知识库仓库的本地只读镜像 */
+export const KB_REPOS_DIR = join(WORKBENCH_HOME, "knowledge-bases");
+
+/** 知识库 Git 凭证（0600），不进入数据库，也不返回给前端 */
+export const KB_CREDENTIALS_DIR = join(WORKBENCH_HOME, "kb-credentials");
+
+/** 知识库问答的 Pi 会话目录 */
+export const KB_SESSIONS_DIR = join(WORKBENCH_HOME, "kb-sessions");
+
+/** 空目录，用来禁用克隆仓库自带的 Git hooks */
+export const KB_HOOKS_DIR = join(WORKBENCH_HOME, "kb-empty-hooks");
+
 /** 服务端口 */
 export const PORT = Number(process.env.WORKBENCH_PORT || 3001);
 

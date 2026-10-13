@@ -42,6 +42,7 @@
     "build:server": "npm --prefix server run build",
     "build": "npm run build:web && npm run build:server",
     "start": "node cli/yworkbench.js",
+    "test": "npm --prefix server test",
     "prepack": "npm run build",
     "publish:beta": "npm publish --tag beta --access public"
   },

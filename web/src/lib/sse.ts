@@ -19,6 +19,10 @@ const EVENT_TYPES = [
   "task_error",
   "tasks_deleted",
   "topics_created",
+  "kb_status",
+  "kb_deleted",
+  "kb_message",
+  "kb_message_delta",
 ] as const;
 
 /** 全局只建立一条 SSE 连接，组件通过 useEvent 订阅 */

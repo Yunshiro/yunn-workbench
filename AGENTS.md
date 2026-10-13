@@ -26,6 +26,9 @@ The application has no authentication layer and is designed to listen on the loo
 - `server/src/prompts.ts`: editable prompt templates and task prompt construction.
 - `server/src/structured-output.ts`: parsing and validation of model JSON output.
 - `server/src/research-tools.ts`: local read-only tools exposed to research sessions.
+- `server/src/knowledge-*.ts`: read-only Git knowledge bases, Markdown chunking, FTS retrieval, and grounded chat.
+- `web/src/views/KnowledgeView.tsx`: the standalone 知识库 page.
+- `docs/knowledge-base.md`: knowledge base requirements and design.
 - `web/src/views/`: page-level React components.
 - `web/src/components/`: shared UI and feature components.
 - `web/src/lib/api.ts`: browser REST client; keep it aligned with server routes.
