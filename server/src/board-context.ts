@@ -1,5 +1,5 @@
 import { BoardError } from "./board-error.js";
-import { excerpt } from "./knowledge-index.js";
+import { excerpt } from "./citations.js";
 import {
   getBoard,
   listBoardCards,

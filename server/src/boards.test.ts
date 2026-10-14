@@ -19,8 +19,8 @@ import { collectBoardContext } from "./board-context.js";
 import { classifyBoardLink, setBoardFetchTimeoutForTests } from "./board-link.js";
 import { getBoardCard, getBoardSession, insertBoardMessage, updateBoardSession } from "./boards-db.js";
 import { db } from "./db.js";
+import { selectCitations } from "./citations.js";
 import { app } from "./http.js";
-import { selectCitations } from "./knowledge-index.js";
 
 const flags = { xUp: true, retryReady: false };
 
@@ -496,6 +496,30 @@ describe("boards", { concurrency: 1 }, () => {
       assert.equal(assistant.citations.length, 1);
       assert.equal(assistant.citations[0].cardId, ids[0]);
       assert.equal(assistant.citations[0].index, 1);
+
+      const followUp = await call(`/api/boards/${board.id}/sessions/${session.id}/messages`, {
+        method: "POST",
+        body: JSON.stringify({ content: "再只看第二张", cardIds: [ids[1]] }),
+      });
+      assert.equal(followUp.res.status, 201);
+      const followStarted = Date.now();
+      let reloaded: any[] = [];
+      while (Date.now() - followStarted < 4000) {
+        reloaded = (await call(`/api/boards/${board.id}/sessions/${session.id}/messages`)).body;
+        const done = reloaded.filter((message) => message.role === "assistant" && message.status === "done");
+        if (done.length >= 2) break;
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      assert.equal(reloaded.length, 4);
+      assert.equal(reloaded[0].content, "这些卡片在说什么？");
+      assert.equal(reloaded[2].content, "再只看第二张");
+      assert.deepEqual(reloaded[2].cardIds, [ids[1]]);
+      assert.equal(reloaded[3].status, "done");
+      assert.equal(reloaded[3].citations.length, 1);
+      assert.equal(reloaded[3].citations[0].cardId, ids[1]);
+      assert.deepEqual(seen.cardIds, [ids[1]]);
+      assert.equal(seen.prompt.includes("ONLY_B"), true);
+      assert.equal(seen.prompt.includes("ONLY_A"), false);
     } finally {
       setBoardAnswerRunnerForTests(null);
     }

@@ -5,7 +5,7 @@
 <h1 align="center">Yunn Workbench</h1>
 
 <p align="center">
-  本地优先的 AI 内容工作台：聚合 RSS 信息，完成阅读筛选、内容分析、选题研究与草稿创作，把链接整理成画板，也可以把 Git 仓库里的 Markdown 当作知识库来提问。
+  本地优先的 AI 内容工作台：聚合 RSS 信息，完成阅读筛选、内容分析、选题研究与草稿创作，把链接整理成画板，并对着卡片提问。
 </p>
 
 <p align="center">
@@ -30,9 +30,8 @@ Yunn Workbench 希望把内容创作者日常使用的多种工具收进同一�
 - **多模型配置**：支持多个模型配置快速切换，也支持 OpenAI 兼容接口。
 - **提示词管理**：在界面中调整任务指令，无需直接修改服务端代码。
 - **选题与草稿**：保存候选选题，关联素材，并继续完成草稿写作。
-- **知识库**：添加 Git 仓库，在本机索引 Markdown，检索后用当前模型问答，并可打开引用原文。仓库保持只读。
 - **画板**：粘贴 X、网页或 YouTube 链接，自动生成可拖动的卡片和纯文本便签。旁边的对话复用当前模型，并标出引用了哪几张卡片。
-- **本地数据存储**：SQLite、模型配置、提示词、研究会话、画板和知识库镜像默认保存在用户本机。
+- **本地数据存储**：SQLite、模型配置、提示词、研究会话和画板默认保存在用户本机。
 - **跨平台 CLI**：通过同一个 npm 包在 macOS、Windows 和 Linux 上启动完整工作台。
 
 ## 安装与运行
@@ -174,17 +173,6 @@ CLI 会输出实际访问地址并自动打开浏览器。
 
 通过界面保存的密钥只写入本机模型配置文件，并使用受限文件权限保存。执行 AI 任务时，所选内容会发送给当前启用的模型服务，请根据自己的隐私要求选择供应商。
 
-## 知识库
-
-侧边栏的 **知识库** 用来问答一组 Markdown 笔记，例如 [yunn-second-brain](https://github.com/Yunshiro/yunn-second-brain) 这样的仓库。它和 RSS、选题、草稿互相独立。
-
-1. 先在 **Agent 设置** 里启用模型。回答会复用这个模型。
-2. 添加仓库地址。公开仓库留空凭证；私有 HTTPS 仓库填写 GitHub Token；SSH 地址粘贴未加密私钥。
-3. 等待克隆和索引完成，然后直接提问。回答下面会列出引用文件，点击可以查看渲染后的原文和路径。
-4. 笔记更新后，点击 **同步**。同步只拉取到本机并重建索引，不会提交或推送。
-
-Token 和私钥只写在数据目录的 `kb-credentials/`，文件权限为 `0600`。页面和日志都不会看到明文。设计说明见 [docs/knowledge-base.md](docs/knowledge-base.md)。
-
 ## 画板
 
 侧边栏的 **画板** 用来把散落的链接收成一面素材墙，并直接对着这些卡片写稿。
@@ -209,7 +197,7 @@ CLI 和源码运行模式默认将数据保存在：
 
 | 环境变量 | 默认值 | 用途 |
 | --- | --- | --- |
-| `WORKBENCH_HOME` | `~/.workbench` | 数据库、模型配置、研究会话、画板会话和知识库目录 |
+| `WORKBENCH_HOME` | `~/.workbench` | 数据库、模型配置、研究会话和画板会话 |
 | `WORKBENCH_PORT` | CLI 自动选择；源码服务为 `3001` | API 与生产页面端口 |
 | `WORKBENCH_HOST` | `127.0.0.1` | 服务监听地址 |
 | `WORKBENCH_WEB_DIST` | `web/dist` | 前端构建产物目录 |
@@ -238,7 +226,6 @@ yunn-workbench/
 React UI ── API / SSE ──> Express ──> SQLite
                               ├─────> RSS feeds
                               ├─────> 画板链接抓取（FxTwitter / 网页 / YouTube）
-                              ├─────> Git 知识库（只读）
                               └─────> Pi Agent / model provider
 ```
 
@@ -253,7 +240,7 @@ React UI ── API / SSE ──> Express ──> SQLite
 | `npm run build:server` | 构建服务端 |
 | `npm run build` | 构建可发布的完整工作台 |
 | `npm start` | 通过 CLI 启动已构建的工作台 |
-| `npm test` | 运行服务端测试（知识库与画板，使用临时数据目录） |
+| `npm test` | 运行服务端测试（画板与旧数据目录兼容，使用临时数据目录） |
 | `npm pack` | 构建并生成 npm 发布包 |
 | `npm run publish:beta` | 以 `beta` dist-tag 发布到 npm |
 

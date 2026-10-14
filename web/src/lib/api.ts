@@ -19,11 +19,6 @@ import type {
   ResearchRevision,
   Draft,
   DraftStatus,
-  KnowledgeBase,
-  KbAuthType,
-  KbSession,
-  KbMessage,
-  KbDocument,
   Board,
   BoardCard,
   BoardSession,
@@ -212,40 +207,6 @@ export const api = {
       headers: jsonHeaders,
       body: JSON.stringify({ indexes, revision }),
     }).then((r) => parse<{ topics: Topic[] }>(r)),
-
-  listKnowledgeBases: () => fetch("/api/knowledge-bases").then((r) => parse<KnowledgeBase[]>(r)),
-  addKnowledgeBase: (input: {
-    repoUrl: string;
-    name?: string;
-    branch?: string;
-    authType: KbAuthType;
-    token?: string;
-    sshKey?: string;
-  }) => fetch("/api/knowledge-bases", { method: "POST", headers: jsonHeaders, body: JSON.stringify(input) }).then((r) => parse<KnowledgeBase>(r)),
-  updateKnowledgeBase: (id: string, input: {
-    name?: string;
-    branch?: string;
-    authType?: KbAuthType;
-    token?: string;
-    sshKey?: string;
-  }) => fetch(`/api/knowledge-bases/${id}`, { method: "PATCH", headers: jsonHeaders, body: JSON.stringify(input) }).then((r) => parse<KnowledgeBase>(r)),
-  deleteKnowledgeBase: (id: string) => fetch(`/api/knowledge-bases/${id}`, { method: "DELETE" }).then((r) => parse<{ ok: boolean }>(r)),
-  syncKnowledgeBase: (id: string) => fetch(`/api/knowledge-bases/${id}/sync`, { method: "POST" }).then((r) => parse<KnowledgeBase>(r)),
-  getKnowledgeDocument: (id: string, path: string) =>
-    fetch(`/api/knowledge-bases/${id}/document?path=${encodeURIComponent(path)}`).then((r) => parse<KbDocument>(r)),
-  listKnowledgeSessions: (id: string) => fetch(`/api/knowledge-bases/${id}/sessions`).then((r) => parse<KbSession[]>(r)),
-  createKnowledgeSession: (id: string) =>
-    fetch(`/api/knowledge-bases/${id}/sessions`, { method: "POST" }).then((r) => parse<KbSession>(r)),
-  deleteKnowledgeSession: (id: string, sessionId: string) =>
-    fetch(`/api/knowledge-bases/${id}/sessions/${sessionId}`, { method: "DELETE" }).then((r) => parse<{ ok: boolean }>(r)),
-  listKnowledgeMessages: (id: string, sessionId: string) =>
-    fetch(`/api/knowledge-bases/${id}/sessions/${sessionId}/messages`).then((r) => parse<KbMessage[]>(r)),
-  sendKnowledgeMessage: (id: string, sessionId: string, content: string) =>
-    fetch(`/api/knowledge-bases/${id}/sessions/${sessionId}/messages`, {
-      method: "POST",
-      headers: jsonHeaders,
-      body: JSON.stringify({ content }),
-    }).then((r) => parse<{ user: KbMessage; assistant: KbMessage }>(r)),
 
   listBoards: () => fetch("/api/boards").then((r) => parse<Board[]>(r)),
   createBoard: (name?: string) =>
