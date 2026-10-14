@@ -6,15 +6,19 @@ const MAX_CHUNK_CHARS = 1400;
 const MAX_TERMS = 16;
 const TERM_SCAN_LIMIT = 40;
 const CJK_CHAR = /[\u3400-\u9fff]/;
-// 长词在前，避免「什么是」被先切成「什么」。
+// 长词在前，从左到右贪心匹配，避免「怎么样」留下「怎么」。
 const CJK_STOP_PHRASES = [
-  "什么是",
-  "为什么",
-  "怎么样",
-  "怎么能",
   "如何才能",
-  "能不能",
+  "怎样才能",
+  "怎么才能",
   "可不可以",
+  "什么样",
+  "怎么样",
+  "为什么",
+  "什么是",
+  "是什么",
+  "怎么能",
+  "能不能",
   "是不是",
   "有没有",
   "哪些",
@@ -29,10 +33,16 @@ const CJK_STOP_PHRASES = [
   "如何",
   "什么",
   "为何",
+  "为啥",
+  "多少",
   "请问",
   "一下",
+  "一些",
   "做好",
-].sort((a, b) => b.length - a.length);
+  "今天",
+  "现在",
+  "最近",
+].sort((a, b) => b.length - a.length || a.localeCompare(b, "zh"));
 const CJK_STOP_PHRASE_SET = new Set(CJK_STOP_PHRASES);
 const EDGE_PARTICLES = new Set(["吗", "呢", "吧", "啊", "呀", "的", "了", "着", "过", "嘛"]);
 const INFIX_PARTICLES = new Set(["的", "了", "着", "过"]);
@@ -264,12 +274,31 @@ function splitScripts(part: string): Array<{ cjk: boolean; text: string }> {
 }
 
 function stripStopPhrases(text: string): string {
-  let result = text;
-  for (const phrase of CJK_STOP_PHRASES) {
-    if (!result.includes(phrase)) continue;
-    result = result.split(phrase).join("\0");
+  const chars = Array.from(text);
+  let out = "";
+  for (let i = 0; i < chars.length;) {
+    const phrase = CJK_STOP_PHRASES.find((item) => (
+      item.length <= chars.length - i && chars.slice(i, i + item.length).join("") === item
+    ));
+    if (phrase) {
+      out += "\0";
+      i += phrase.length;
+      continue;
+    }
+    out += chars[i];
+    i += 1;
   }
-  return result;
+  return out;
+}
+
+function blockedTerm(term: string, source: string): boolean {
+  if (CJK_STOP_PHRASE_SET.has(term) || isOnlyParticles(term)) return true;
+  for (const phrase of CJK_STOP_PHRASES) {
+    if (phrase.length >= 2 && term.includes(phrase)) return true;
+    if (phrase.length <= term.length || !source.includes(phrase) || !phrase.includes(term)) continue;
+    return true;
+  }
+  return false;
 }
 
 function splitInfixParticles(text: string): string[] {
@@ -321,11 +350,12 @@ function cjkSegments(text: string): string[] {
 
 function collectCjkTerms(
   segment: string,
+  source: string,
   fts: Set<string>,
   exactLike: Set<string>,
   gramLike: Set<string>,
 ): void {
-  if (segment.length < 2 || CJK_STOP_PHRASE_SET.has(segment) || isOnlyParticles(segment)) return;
+  if (segment.length < 2 || blockedTerm(segment, source)) return;
   if (segment.length === 2) {
     exactLike.add(segment);
     return;
@@ -334,14 +364,15 @@ function collectCjkTerms(
   for (const size of [6, 4]) {
     if (segment.length < size) continue;
     for (let i = 0; i + size <= segment.length; i += 2) {
-      fts.add(segment.slice(i, i + size));
+      const window = segment.slice(i, i + size);
+      if (!blockedTerm(window, source)) fts.add(window);
       if (fts.size >= TERM_SCAN_LIMIT) break;
     }
   }
   const chars = Array.from(segment);
   for (let i = 0; i + 1 < chars.length; i += 1) {
     const gram = chars[i] + chars[i + 1];
-    if (CJK_STOP_PHRASE_SET.has(gram) || isOnlyParticles(gram)) continue;
+    if (blockedTerm(gram, source)) continue;
     gramLike.add(gram);
     if (gramLike.size >= TERM_SCAN_LIMIT) break;
   }
@@ -363,7 +394,7 @@ export function extractKnowledgeTerms(question: string): KnowledgeQueryTerms {
         continue;
       }
       for (const segment of cjkSegments(run.text)) {
-        collectCjkTerms(segment, fts, exactLike, gramLike);
+        collectCjkTerms(segment, run.text, fts, exactLike, gramLike);
       }
     }
   }

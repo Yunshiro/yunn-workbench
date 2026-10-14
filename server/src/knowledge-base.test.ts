@@ -110,6 +110,24 @@ Use the keyword lighthouse when the draft is ready.
 口播 workflow 要短，方便和中文笔记对照。
 `;
 
+const JOURNAL = `---
+title: 日记模板
+---
+
+# 日记
+
+## 今天最重要的 3 件
+
+先写三件真正要做的事。
+`;
+
+const TWEET = `---
+title: 一条短想法
+---
+
+怎么让一句话被别人愿意转发。
+`;
+
 function indexMarkdown(path: string, markdown: string) {
   const chunked = chunkMarkdown(path, markdown);
   return {
@@ -321,6 +339,32 @@ describe("knowledge base", { concurrency: 1 }, () => {
     assert.ok(searchKnowledgeChunks(kb.id, "口播workflow").some((hit) => hit.path === "notes/workflow.md"));
     assert.equal(searchKnowledgeChunks(kb.id, "量子纠缠").length, 0);
     assert.equal(searchKnowledgeChunks(kb.id, "xyzzyplugh").length, 0);
+    assert.equal(searchKnowledgeChunks(kb.id, "口播辞职").length, 0);
+  });
+
+  it("drops unrelated weather questions that only share filler words", () => {
+    const kb = insertKnowledgeBase({
+      name: "天气误伤",
+      repoUrl: "https://example.com/weather-false-positive.git",
+      authType: "none",
+      branch: "main",
+    });
+    replaceKnowledgeIndex(kb.id, [
+      indexMarkdown("templates/journal.md", JOURNAL),
+      indexMarkdown("notes/tweet.md", TWEET),
+    ]);
+
+    const weather = extractKnowledgeTerms("今天天气怎么样");
+    assert.deepEqual(weather.ftsTerms, []);
+    assert.deepEqual(weather.likeTerms, ["天气"]);
+    assert.equal(weather.likeTerms.includes("今天"), false);
+    assert.equal(weather.likeTerms.includes("怎么"), false);
+    assert.equal(extractKnowledgeTerms("现在最近一些").likeTerms.length, 0);
+    assert.equal(extractKnowledgeTerms("辞职是什么").likeTerms.includes("辞职"), true);
+    assert.equal(extractKnowledgeTerms("辞职是什么").likeTerms.includes("什么"), false);
+    assert.equal(searchKnowledgeChunks(kb.id, "今天天气怎么样").length, 0);
+    assert.equal(searchKnowledgeChunks(kb.id, "今天天气怎么样").some((hit) => hit.path === "templates/journal.md"), false);
+    assert.equal(searchKnowledgeChunks(kb.id, "今天天气怎么样").some((hit) => hit.content.includes("怎么让")), false);
   });
 
   it("clones and syncs a local fixture without pushing", async () => {

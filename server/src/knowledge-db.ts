@@ -340,9 +340,14 @@ export function searchKnowledgeChunks(kbId: string, question: string, limit = 8)
     }
   }
 
-  const terms = [...ftsTerms, ...likeTerms];
+  const multiKeyword = ftsTerms.length + likeTerms.length > 1;
   return [...merged.values()]
-    .map(({ hit, haystack }) => ({ hit, termHits: countDistinctTerms(haystack, terms) }))
+    .map(({ hit, haystack }) => {
+      const ftsHits = countDistinctTerms(haystack, ftsTerms);
+      const likeHits = countDistinctTerms(haystack, likeTerms);
+      return { hit, termHits: ftsHits + likeHits, ftsHits, likeHits };
+    })
+    .filter(({ ftsHits, likeHits }) => !multiKeyword || ftsHits >= 1 || ftsHits + likeHits >= 2)
     .sort((a, b) => b.termHits - a.termHits || a.hit.score - b.hit.score)
     .slice(0, bounded)
     .map(({ hit }) => hit);
