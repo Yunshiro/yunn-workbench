@@ -292,6 +292,17 @@ function countDistinctTerms(haystack: string, terms: string[]): number {
   return count;
 }
 
+function earliestTermIndex(haystack: string, terms: string[]): number {
+  const lower = haystack.toLowerCase();
+  let best = Number.POSITIVE_INFINITY;
+  for (const term of terms) {
+    if (!term) continue;
+    const index = lower.indexOf(term);
+    if (index >= 0 && index < best) best = index;
+  }
+  return best;
+}
+
 export function searchKnowledgeChunks(kbId: string, question: string, limit = 8): KbSearchHit[] {
   const bounded = Math.min(Math.max(limit, 1), 20);
   const { ftsTerms, likeTerms } = extractKnowledgeTerms(question);
@@ -340,15 +351,14 @@ export function searchKnowledgeChunks(kbId: string, question: string, limit = 8)
     }
   }
 
-  const multiKeyword = ftsTerms.length + likeTerms.length > 1;
+  const terms = [...ftsTerms, ...likeTerms];
   return [...merged.values()]
-    .map(({ hit, haystack }) => {
-      const ftsHits = countDistinctTerms(haystack, ftsTerms);
-      const likeHits = countDistinctTerms(haystack, likeTerms);
-      return { hit, termHits: ftsHits + likeHits, ftsHits, likeHits };
-    })
-    .filter(({ ftsHits, likeHits }) => !multiKeyword || ftsHits >= 1 || ftsHits + likeHits >= 2)
-    .sort((a, b) => b.termHits - a.termHits || a.hit.score - b.hit.score)
+    .map(({ hit, haystack }) => ({
+      hit,
+      termHits: countDistinctTerms(haystack, terms),
+      position: earliestTermIndex(haystack, terms),
+    }))
+    .sort((a, b) => b.termHits - a.termHits || a.hit.score - b.hit.score || a.position - b.position)
     .slice(0, bounded)
     .map(({ hit }) => hit);
 }

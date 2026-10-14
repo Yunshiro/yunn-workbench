@@ -128,6 +128,15 @@ title: 一条短想法
 怎么让一句话被别人愿意转发。
 `;
 
+const PROFILE = `---
+title: 个人简介
+---
+
+# 个人简介
+
+辞职之后把时间用来写东西，收入来自稿费和咨询。
+`;
+
 function indexMarkdown(path: string, markdown: string) {
   const chunked = chunkMarkdown(path, markdown);
   return {
@@ -303,6 +312,7 @@ describe("knowledge base", { concurrency: 1 }, () => {
       indexMarkdown("notes/resign.md", RESIGN),
       indexMarkdown("notes/topic.md", TOPIC_NOTE),
       indexMarkdown("notes/workflow.md", WORKFLOW),
+      indexMarkdown("life/profile.md", PROFILE),
     ]);
 
     const spokenTerms = extractKnowledgeTerms("怎么做好口播？");
@@ -339,7 +349,23 @@ describe("knowledge base", { concurrency: 1 }, () => {
     assert.ok(searchKnowledgeChunks(kb.id, "口播workflow").some((hit) => hit.path === "notes/workflow.md"));
     assert.equal(searchKnowledgeChunks(kb.id, "量子纠缠").length, 0);
     assert.equal(searchKnowledgeChunks(kb.id, "xyzzyplugh").length, 0);
-    assert.equal(searchKnowledgeChunks(kb.id, "口播辞职").length, 0);
+
+    const tips = extractKnowledgeTerms("口播有什么技巧");
+    assert.ok(tips.likeTerms.includes("口播"));
+    assert.equal(tips.likeTerms.includes("什么"), false);
+    assert.equal(tips.likeTerms.includes("有什么"), false);
+    assert.equal(tips.ftsTerms.some((term) => term.includes("什么")), false);
+    const tipHits = searchKnowledgeChunks(kb.id, "口播有什么技巧");
+    assert.ok(tipHits.some((hit) => hit.path === "notes/koubo.md" && hit.content.includes("口播")));
+    assert.ok(tipHits.some((hit) => hit.path === "notes/koubo-extra.md"));
+
+    const income = extractKnowledgeTerms("辞职以后靠什么赚钱");
+    assert.ok(income.likeTerms.includes("辞职"));
+    assert.ok(income.likeTerms.includes("赚钱"));
+    assert.equal(income.likeTerms.includes("以后"), false);
+    assert.equal(income.likeTerms.includes("什么"), false);
+    assert.equal(income.likeTerms.includes("靠什么"), false);
+    assert.ok(searchKnowledgeChunks(kb.id, "辞职以后靠什么赚钱").some((hit) => hit.path === "life/profile.md" && hit.content.includes("辞职")));
   });
 
   it("drops unrelated weather questions that only share filler words", () => {
