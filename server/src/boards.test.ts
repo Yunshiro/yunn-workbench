@@ -3,6 +3,18 @@ import type { Server } from "node:http";
 import { after, before, describe, it } from "node:test";
 import { getAgentAuthConfig } from "./agent-auth.js";
 import { askBoard, setBoardAnswerRunnerForTests } from "./board-chat.js";
+import {
+  CARD_GAP,
+  CARD_MAX_HEIGHT,
+  CARD_WIDTH,
+  NOTE_HEIGHT,
+  boxesOverlap,
+  centeredCardOrigin,
+  findOpenPosition,
+  flowToScreen,
+  separateOverlaps,
+  type CardBox,
+} from "./board-placement.js";
 import { collectBoardContext } from "./board-context.js";
 import { classifyBoardLink, setBoardFetchTimeoutForTests } from "./board-link.js";
 import { getBoardCard, getBoardSession, insertBoardMessage, updateBoardSession } from "./boards-db.js";
@@ -373,24 +385,75 @@ describe("boards", { concurrency: 1 }, () => {
     assert.notEqual(ready.imageUrl, ready.authorAvatar);
   });
 
-  it("offsets cards that would otherwise stack on the same point", async () => {
+  it("places cards of different heights without bounding-box intersections", () => {
+    const heights = [322, 215, 280, 322];
+    const anchor = { x: 48, y: 48 };
+    const placed: CardBox[] = [];
+    for (const height of heights) {
+      const size = { width: CARD_WIDTH, height };
+      const position = findOpenPosition(anchor, placed, size, CARD_GAP);
+      placed.push({ ...position, ...size });
+    }
+    for (let i = 0; i < placed.length; i += 1) {
+      for (let j = i + 1; j < placed.length; j += 1) {
+        assert.equal(boxesOverlap(placed[i], placed[j], CARD_GAP), false);
+      }
+    }
+
+    const observed = [
+      { id: "x", x: 48, y: 48, width: 280, height: 322, createdAt: 1 },
+      { id: "youtube", x: 487, y: 108, width: 280, height: 280, createdAt: 2 },
+      { id: "example", x: 187, y: 308, width: 280, height: 215, createdAt: 3 },
+      { id: "wiki", x: 487, y: 308, width: 280, height: 322, createdAt: 4 },
+    ];
+    assert.equal(observed.some((box, index) => observed.slice(index + 1).some((other) => boxesOverlap(box, other, 0))), true);
+    const moves = separateOverlaps(observed, CARD_GAP);
+    const resolved = observed.map((box) => {
+      const move = moves.find((item) => item.id === box.id);
+      return move ? { ...box, x: move.x, y: move.y } : box;
+    });
+    for (let i = 0; i < resolved.length; i += 1) {
+      for (let j = i + 1; j < resolved.length; j += 1) {
+        assert.equal(boxesOverlap(resolved[i], resolved[j], CARD_GAP), false);
+      }
+    }
+  });
+
+  it("centers a new note in the canvas after panning and zooming", () => {
+    const container = { left: 456, top: 118, width: 644, height: 742 };
+    const chatLeft = container.left + container.width;
+    const transform = { x: -220, y: 90, zoom: 1.35 };
+    const size = { width: CARD_WIDTH, height: NOTE_HEIGHT };
+    const origin = centeredCardOrigin(container, transform, size);
+    const topLeft = flowToScreen(origin, container, transform);
+    const center = flowToScreen(
+      { x: origin.x + size.width / 2, y: origin.y + size.height / 2 },
+      container,
+      transform,
+    );
+    assert.ok(Math.abs(center.x - (container.left + container.width / 2)) < 0.01);
+    assert.ok(Math.abs(center.y - (container.top + container.height / 2)) < 0.01);
+    assert.ok(topLeft.x >= container.left - 0.01);
+    assert.ok(topLeft.y >= container.top - 0.01);
+    assert.ok(topLeft.x + size.width * transform.zoom <= chatLeft + 0.01);
+    assert.ok(topLeft.y + size.height * transform.zoom <= container.top + container.height + 0.01);
+  });
+
+  it("keeps an explicit position and spaces cards that omit one", async () => {
     const board = (await call("/api/boards", { method: "POST", body: JSON.stringify({ name: "排开" }) })).body;
-    const points = [];
-    for (const body of ["第一张", "第二张", "第三张"]) {
-      const note = await call(`/api/boards/${board.id}/cards`, {
-        method: "POST",
-        body: JSON.stringify({ kind: "note", x: 120, y: 80, body }),
-      });
-      points.push(note.body);
-    }
-    assert.equal(points[0].x, 120);
-    assert.equal(points[0].y, 80);
-    const keys = points.map((card) => `${card.x},${card.y}`);
-    assert.equal(new Set(keys).size, 3);
-    for (const card of points) {
-      assert.ok(card.x >= 120 && card.x < 120 + 300 * 3);
-      assert.ok(card.y >= 80 && card.y < 80 + 200 * 3);
-    }
+    const pinned = await call(`/api/boards/${board.id}/cards`, {
+      method: "POST",
+      body: JSON.stringify({ kind: "note", x: 120, y: 80, body: "固定" }),
+    });
+    assert.equal(pinned.body.x, 120);
+    assert.equal(pinned.body.y, 80);
+    const next = await call(`/api/boards/${board.id}/cards`, {
+      method: "POST",
+      body: JSON.stringify({ kind: "note", body: "自动" }),
+    });
+    const pinnedBox = { x: 120, y: 80, width: CARD_WIDTH, height: CARD_MAX_HEIGHT };
+    const nextBox = { x: next.body.x, y: next.body.y, width: CARD_WIDTH, height: CARD_MAX_HEIGHT };
+    assert.equal(boxesOverlap(pinnedBox, nextBox, CARD_GAP), false);
   });
 
   it("mocked answer cites only the selected cards", async () => {
