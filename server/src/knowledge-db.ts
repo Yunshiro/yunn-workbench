@@ -277,7 +277,8 @@ function mapHit(row: any): KbSearchHit {
 }
 
 const FTS_CANDIDATE_LIMIT = 40;
-const LIKE_CANDIDATE_LIMIT = 30;
+const LIKE_CANDIDATE_LIMIT = 40;
+const MAX_CHUNKS_PER_DOCUMENT = 2;
 
 function escapeLike(value: string): string {
   return value.replace(/[\\%_]/g, (char) => `\\${char}`);
@@ -352,15 +353,24 @@ export function searchKnowledgeChunks(kbId: string, question: string, limit = 8)
   }
 
   const terms = [...ftsTerms, ...likeTerms];
-  return [...merged.values()]
+  const ranked = [...merged.values()]
     .map(({ hit, haystack }) => ({
       hit,
       termHits: countDistinctTerms(haystack, terms),
       position: earliestTermIndex(haystack, terms),
     }))
-    .sort((a, b) => b.termHits - a.termHits || a.hit.score - b.hit.score || a.position - b.position)
-    .slice(0, bounded)
-    .map(({ hit }) => hit);
+    .sort((a, b) => b.termHits - a.termHits || a.hit.score - b.hit.score || a.position - b.position);
+  const perDocument = new Map<string, number>();
+  const picked: KbSearchHit[] = [];
+  for (const item of ranked) {
+    const key = item.hit.documentId || item.hit.path;
+    const used = perDocument.get(key) || 0;
+    if (used >= MAX_CHUNKS_PER_DOCUMENT) continue;
+    perDocument.set(key, used + 1);
+    picked.push(item.hit);
+    if (picked.length >= bounded) break;
+  }
+  return picked;
 }
 
 function rowToSession(row: any): KbSessionRecord {

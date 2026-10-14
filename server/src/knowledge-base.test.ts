@@ -119,6 +119,10 @@ title: 日记模板
 ## 今天最重要的 3 件
 
 先写三件真正要做的事。
+
+## 明天要调整的
+
+把没做完的事挪到后面。
 `;
 
 const TWEET = `---
@@ -391,6 +395,45 @@ describe("knowledge base", { concurrency: 1 }, () => {
     assert.equal(searchKnowledgeChunks(kb.id, "今天天气怎么样").length, 0);
     assert.equal(searchKnowledgeChunks(kb.id, "今天天气怎么样").some((hit) => hit.path === "templates/journal.md"), false);
     assert.equal(searchKnowledgeChunks(kb.id, "今天天气怎么样").some((hit) => hit.content.includes("怎么让")), false);
+    const tomorrow = extractKnowledgeTerms("明天吃什么");
+    assert.equal(tomorrow.likeTerms.includes("明天"), false);
+    assert.equal(tomorrow.likeTerms.includes("什么"), false);
+    assert.equal(tomorrow.ftsTerms.some((term) => term.includes("明天")), false);
+    assert.equal(extractKnowledgeTerms("昨天吃什么").likeTerms.includes("昨天"), false);
+    assert.equal(searchKnowledgeChunks(kb.id, "明天吃什么").length, 0);
+    assert.equal(searchKnowledgeChunks(kb.id, "明天吃什么").some((hit) => hit.heading === "明天要调整的" || (hit.heading || "").includes("明天要调整的")), false);
+  });
+
+  it("keeps at most two chunks from one long document", () => {
+    const kb = insertKnowledgeBase({
+      name: "长文口播",
+      repoUrl: "https://example.com/long-spoken-notes.git",
+      authType: "none",
+      branch: "main",
+    });
+    const sections = ["---", "title: 口播汇编", "---", "", "# 口播汇编", ""];
+    for (let i = 1; i <= 10; i += 1) {
+      sections.push(`## 片段${i}`, "", `这一段继续写口播，编号 ${i}。`, "");
+    }
+    replaceKnowledgeIndex(kb.id, [
+      indexMarkdown("saved/long-thread.md", sections.join("\n")),
+      indexMarkdown("life/profile.md", `---
+title: 生活记录
+---
+
+# 生活记录
+
+近况普通，只在这里提到一次口播。
+`),
+    ]);
+
+    const hits = searchKnowledgeChunks(kb.id, "口播");
+    assert.ok(hits.some((hit) => hit.path === "life/profile.md" && hit.content.includes("口播")));
+    const counts = new Map<string, number>();
+    for (const hit of hits) counts.set(hit.path, (counts.get(hit.path) || 0) + 1);
+    for (const count of counts.values()) assert.ok(count <= 2);
+    assert.ok((counts.get("saved/long-thread.md") || 0) <= 2);
+    assert.ok((counts.get("saved/long-thread.md") || 0) >= 1);
   });
 
   it("clones and syncs a local fixture without pushing", async () => {
