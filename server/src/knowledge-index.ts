@@ -4,6 +4,38 @@ import { join, relative, sep } from "node:path";
 const SKIP_DIRS = new Set([".git", "node_modules", "vendor", "dist", ".obsidian", ".trash", "coverage"]);
 const MAX_CHUNK_CHARS = 1400;
 const MAX_TERMS = 16;
+const TERM_SCAN_LIMIT = 40;
+const CJK_CHAR = /[\u3400-\u9fff]/;
+// 长词在前，避免「什么是」被先切成「什么」。
+const CJK_STOP_PHRASES = [
+  "什么是",
+  "为什么",
+  "怎么样",
+  "怎么能",
+  "如何才能",
+  "能不能",
+  "可不可以",
+  "是不是",
+  "有没有",
+  "哪些",
+  "哪个",
+  "哪里",
+  "哪儿",
+  "是否",
+  "能否",
+  "可以",
+  "怎样",
+  "怎么",
+  "如何",
+  "什么",
+  "为何",
+  "请问",
+  "一下",
+  "做好",
+].sort((a, b) => b.length - a.length);
+const CJK_STOP_PHRASE_SET = new Set(CJK_STOP_PHRASES);
+const EDGE_PARTICLES = new Set(["吗", "呢", "吧", "啊", "呀", "的", "了", "着", "过", "嘛"]);
+const INFIX_PARTICLES = new Set(["的", "了", "着", "过"]);
 
 export const MAX_MARKDOWN_FILES = 5000;
 export const MAX_MARKDOWN_FILE_BYTES = 512 * 1024;
@@ -215,35 +247,143 @@ export function searchableText(input: {
     .join("\n");
 }
 
-export function buildFtsQuery(question: string): string | null {
+export interface KnowledgeQueryTerms {
+  ftsTerms: string[];
+  likeTerms: string[];
+}
+
+function splitScripts(part: string): Array<{ cjk: boolean; text: string }> {
+  const runs: Array<{ cjk: boolean; text: string }> = [];
+  for (const char of part) {
+    const cjk = CJK_CHAR.test(char);
+    const last = runs[runs.length - 1];
+    if (!last || last.cjk !== cjk) runs.push({ cjk, text: char });
+    else last.text += char;
+  }
+  return runs;
+}
+
+function stripStopPhrases(text: string): string {
+  let result = text;
+  for (const phrase of CJK_STOP_PHRASES) {
+    if (!result.includes(phrase)) continue;
+    result = result.split(phrase).join("\0");
+  }
+  return result;
+}
+
+function splitInfixParticles(text: string): string[] {
+  const chars = Array.from(text);
+  const parts: string[] = [];
+  let buf = "";
+  for (let i = 0; i < chars.length; i += 1) {
+    const char = chars[i];
+    if (INFIX_PARTICLES.has(char) && buf.length >= 2) {
+      const rest = chars.slice(i + 1).join("").replace(/^[的了着过吗呢吧啊呀嘛]+/u, "");
+      if (rest.length >= 2) {
+        parts.push(buf);
+        buf = "";
+        continue;
+      }
+    }
+    buf += char;
+  }
+  if (buf) parts.push(buf);
+  return parts;
+}
+
+function trimEdgeParticles(text: string): string {
+  let result = text;
+  while (result.length > 2 && EDGE_PARTICLES.has(result[0])) result = result.slice(1);
+  while (result.length > 2 && EDGE_PARTICLES.has(result[result.length - 1])) result = result.slice(0, -1);
+  return result;
+}
+
+function isOnlyParticles(text: string): boolean {
+  if (!text) return true;
+  for (const char of text) {
+    if (!EDGE_PARTICLES.has(char)) return false;
+  }
+  return true;
+}
+
+function cjkSegments(text: string): string[] {
+  const segments: string[] = [];
+  for (const piece of stripStopPhrases(text).split("\0")) {
+    if (!piece) continue;
+    for (const part of splitInfixParticles(piece)) {
+      const trimmed = trimEdgeParticles(part);
+      if (trimmed.length >= 2) segments.push(trimmed);
+    }
+  }
+  return segments;
+}
+
+function collectCjkTerms(
+  segment: string,
+  fts: Set<string>,
+  exactLike: Set<string>,
+  gramLike: Set<string>,
+): void {
+  if (segment.length < 2 || CJK_STOP_PHRASE_SET.has(segment) || isOnlyParticles(segment)) return;
+  if (segment.length === 2) {
+    exactLike.add(segment);
+    return;
+  }
+  if (segment.length <= 8) fts.add(segment);
+  for (const size of [6, 4]) {
+    if (segment.length < size) continue;
+    for (let i = 0; i + size <= segment.length; i += 2) {
+      fts.add(segment.slice(i, i + size));
+      if (fts.size >= TERM_SCAN_LIMIT) break;
+    }
+  }
+  const chars = Array.from(segment);
+  for (let i = 0; i + 1 < chars.length; i += 1) {
+    const gram = chars[i] + chars[i + 1];
+    if (CJK_STOP_PHRASE_SET.has(gram) || isOnlyParticles(gram)) continue;
+    gramLike.add(gram);
+    if (gramLike.size >= TERM_SCAN_LIMIT) break;
+  }
+}
+
+export function extractKnowledgeTerms(question: string): KnowledgeQueryTerms {
   const cleaned = question.replace(/[^\p{L}\p{N}]+/gu, " ").trim().toLowerCase();
-  if (!cleaned) return null;
-  const terms = new Set<string>();
+  const fts = new Set<string>();
+  const exactLike = new Set<string>();
+  const gramLike = new Set<string>();
+  if (!cleaned) return { ftsTerms: [], likeTerms: [] };
+
   for (const part of cleaned.split(/\s+/)) {
     if (part.length < 2) continue;
-    const cjk = /[\u3400-\u9fff]/.test(part);
-    if (!cjk) {
-      if (part.length >= 3 && part.length <= 48) terms.add(part);
-      continue;
-    }
-    if (part.length >= 3 && part.length <= 8) terms.add(part);
-    for (const size of [6, 4]) {
-      if (part.length < size) continue;
-      for (let i = 0; i + size <= part.length; i += 2) {
-        terms.add(part.slice(i, i + size));
-        if (terms.size >= 40) break;
+    for (const run of splitScripts(part)) {
+      if (!run.cjk) {
+        if (run.text.length >= 3 && run.text.length <= 48) fts.add(run.text);
+        else if (run.text.length === 2) exactLike.add(run.text);
+        continue;
+      }
+      for (const segment of cjkSegments(run.text)) {
+        collectCjkTerms(segment, fts, exactLike, gramLike);
       }
     }
   }
-  const ranked = [...terms].sort((a, b) => b.length - a.length).slice(0, MAX_TERMS);
-  if (ranked.length === 0) return null;
-  return ranked.map((term) => `"${term.replace(/"/g, "\"\"")}"`).join(" OR ");
+
+  const ftsTerms = [...fts].sort((a, b) => b.length - a.length).slice(0, MAX_TERMS);
+  const likeTerms: string[] = [];
+  const seen = new Set<string>();
+  for (const term of [...exactLike, ...gramLike]) {
+    if (seen.has(term)) continue;
+    seen.add(term);
+    likeTerms.push(term);
+    if (likeTerms.length >= MAX_TERMS) break;
+  }
+  return { ftsTerms, likeTerms };
 }
 
-export function likeNeedle(question: string): string | null {
-  const parts = question.replace(/[^\p{L}\p{N}]+/gu, " ").trim().split(/\s+/).filter((part) => part.length >= 2);
-  if (parts.length === 0) return null;
-  return parts.sort((a, b) => b.length - a.length)[0].slice(0, 32);
+export function buildFtsQuery(question: string): string | null {
+  const { ftsTerms } = extractKnowledgeTerms(question);
+  if (ftsTerms.length === 0) return null;
+  return ftsTerms.map((term) => `"${term.replace(/"/g, "\"\"")}"`).join(" OR ");
 }
 
 export function excerpt(content: string, max = 280): string {

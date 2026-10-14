@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { db } from "./db.js";
 import { credentialConfigured, type KbAuthType } from "./knowledge-git.js";
-import { buildFtsQuery, likeNeedle } from "./knowledge-index.js";
+import { extractKnowledgeTerms } from "./knowledge-index.js";
 
 export type KbStatus = "pending" | "syncing" | "ready" | "error";
 
@@ -276,31 +276,76 @@ function mapHit(row: any): KbSearchHit {
   };
 }
 
+const FTS_CANDIDATE_LIMIT = 40;
+const LIKE_CANDIDATE_LIMIT = 30;
+
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, (char) => `\\${char}`);
+}
+
+function countDistinctTerms(haystack: string, terms: string[]): number {
+  const lower = haystack.toLowerCase();
+  let count = 0;
+  for (const term of terms) {
+    if (term && lower.includes(term)) count += 1;
+  }
+  return count;
+}
+
 export function searchKnowledgeChunks(kbId: string, question: string, limit = 8): KbSearchHit[] {
   const bounded = Math.min(Math.max(limit, 1), 20);
-  const ftsQuery = buildFtsQuery(question);
-  if (ftsQuery) {
+  const { ftsTerms, likeTerms } = extractKnowledgeTerms(question);
+  if (ftsTerms.length === 0 && likeTerms.length === 0) return [];
+
+  const merged = new Map<string, { hit: KbSearchHit; haystack: string }>();
+  const remember = (row: any, haystack: string, score: number) => {
+    const hit = mapHit({ ...row, score });
+    const existing = merged.get(hit.chunkId);
+    if (!existing) {
+      merged.set(hit.chunkId, { hit, haystack });
+      return;
+    }
+    if (score < existing.hit.score) existing.hit.score = score;
+    if (haystack.length > existing.haystack.length) existing.haystack = haystack;
+  };
+
+  if (ftsTerms.length > 0) {
+    const ftsQuery = ftsTerms.map((term) => `"${term.replace(/"/g, "\"\"")}"`).join(" OR ");
     try {
       const rows = db.prepare(`SELECT c.id, c.document_id, c.path, c.title, c.heading, c.content, c.start_line, c.end_line,
-          bm25(kb_chunks_fts, 1.0, 8.0, 3.0, 1.0) AS score
+          bm25(kb_chunks_fts, 1.0, 8.0, 3.0, 1.0) AS score,
+          kb_chunks_fts.content AS search_text
         FROM kb_chunks_fts
         JOIN kb_chunks c ON c.id = kb_chunks_fts.chunk_id
         WHERE kb_chunks_fts MATCH ? AND kb_chunks_fts.kb_id = ?
         ORDER BY score
-        LIMIT ?`).all(ftsQuery, kbId, bounded) as any[];
-      if (rows.length > 0) return rows.map(mapHit);
+        LIMIT ?`).all(ftsQuery, kbId, FTS_CANDIDATE_LIMIT) as any[];
+      for (const row of rows) remember(row, String(row.search_text || ""), Number(row.score) || 0);
     } catch {
-      /* 查询语法不被 trigram 接受时，退回子串匹配 */
+      /* 查询语法不被 trigram 接受时，只保留二字 LIKE */
     }
   }
-  const needle = likeNeedle(question);
-  if (!needle) return [];
-  const pattern = `%${needle.replace(/[\\%_]/g, (char) => `\\${char}`)}%`;
-  const rows = db.prepare(`SELECT id, document_id, path, title, heading, content, start_line, end_line, 0 AS score
-    FROM kb_chunks
-    WHERE kb_id = ? AND (content LIKE ? ESCAPE '\\' OR title LIKE ? ESCAPE '\\' OR IFNULL(heading, '') LIKE ? ESCAPE '\\')
-    LIMIT ?`).all(kbId, pattern, pattern, pattern, bounded) as any[];
-  return rows.map(mapHit);
+
+  if (likeTerms.length > 0) {
+    const likeStmt = db.prepare(`SELECT id, document_id, path, title, heading, content, start_line, end_line
+      FROM kb_chunks
+      WHERE kb_id = ? AND (content LIKE ? ESCAPE '\\' OR title LIKE ? ESCAPE '\\' OR IFNULL(heading, '') LIKE ? ESCAPE '\\')
+      LIMIT ?`);
+    for (const term of likeTerms) {
+      const pattern = `%${escapeLike(term)}%`;
+      const rows = likeStmt.all(kbId, pattern, pattern, pattern, LIKE_CANDIDATE_LIMIT) as any[];
+      for (const row of rows) {
+        remember(row, `${row.title || ""}\n${row.heading || ""}\n${row.content || ""}`, 0);
+      }
+    }
+  }
+
+  const terms = [...ftsTerms, ...likeTerms];
+  return [...merged.values()]
+    .map(({ hit, haystack }) => ({ hit, termHits: countDistinctTerms(haystack, terms) }))
+    .sort((a, b) => b.termHits - a.termHits || a.hit.score - b.hit.score)
+    .slice(0, bounded)
+    .map(({ hit }) => hit);
 }
 
 function rowToSession(row: any): KbSessionRecord {

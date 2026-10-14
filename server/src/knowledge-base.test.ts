@@ -31,6 +31,7 @@ import {
 import {
   buildFtsQuery,
   chunkMarkdown,
+  extractKnowledgeTerms,
   readMarkdownTree,
   searchableText,
   selectCitations,
@@ -53,6 +54,83 @@ aliases:
 
 每条选题至少要有三条本地笔记支撑。
 `;
+
+const SPOKEN = `---
+title: 口播入门
+tags: [表达]
+aliases:
+  - 开口播
+---
+
+# 口播入门
+
+做口播时，前三秒先给听众一个留下来的理由。口播不是把稿子念完。
+`;
+
+const SPOKEN_EXTRA = `---
+title: 镜头前的表达
+---
+
+# 镜头前的表达
+
+把一句口播收成听众能复述的话，比堆形容词有用。
+`;
+
+const RESIGN = `---
+title: 辞职清单
+tags: [职业]
+---
+
+# 辞职清单
+
+离职前把交接写成清单。辞职不是把情绪发出去，是把责任交出去。
+`;
+
+const TOPIC_NOTE = `---
+title: 内容选题
+tags: [选题]
+aliases:
+  - 找选题
+---
+
+# 内容选题
+
+从重复出现的问题里确定一个读者已经在问的题目。
+`;
+
+const WORKFLOW = `---
+title: Editorial workflow
+tags: [workflow]
+---
+
+# Editorial workflow
+
+Keep a local markdown note before you publish.
+Use the keyword lighthouse when the draft is ready.
+口播 workflow 要短，方便和中文笔记对照。
+`;
+
+function indexMarkdown(path: string, markdown: string) {
+  const chunked = chunkMarkdown(path, markdown);
+  return {
+    path,
+    title: chunked.title,
+    content: markdown,
+    contentHash: path,
+    frontmatter: { title: chunked.title, tags: chunked.tags, aliases: chunked.aliases },
+    chunks: chunked.chunks.map((chunk) => ({
+      ...chunk,
+      searchText: searchableText({
+        title: chunked.title,
+        tags: chunked.tags,
+        aliases: chunked.aliases,
+        description: chunked.description,
+        heading: chunk.heading,
+        content: chunk.content,
+      }),
+    })),
+  };
+}
 
 function git(cwd: string, args: string[]): string {
   const result = spawnSync("git", args, {
@@ -192,6 +270,57 @@ describe("knowledge base", { concurrency: 1 }, () => {
     const body = await rejected.text();
     assert.equal(rejected.status, 400);
     assert.equal(body.includes(SECRET), false);
+  });
+
+  it("retrieves chinese keywords after stripping question words", () => {
+    const kb = insertKnowledgeBase({
+      name: "第二大脑",
+      repoUrl: "https://example.com/yunn-second-brain.git",
+      authType: "none",
+      branch: "main",
+    });
+    replaceKnowledgeIndex(kb.id, [
+      indexMarkdown("notes/koubo.md", SPOKEN),
+      indexMarkdown("notes/koubo-extra.md", SPOKEN_EXTRA),
+      indexMarkdown("notes/resign.md", RESIGN),
+      indexMarkdown("notes/topic.md", TOPIC_NOTE),
+      indexMarkdown("notes/workflow.md", WORKFLOW),
+    ]);
+
+    const spokenTerms = extractKnowledgeTerms("怎么做好口播？");
+    assert.equal(spokenTerms.ftsTerms.includes("怎么做好口播"), false);
+    assert.equal(spokenTerms.ftsTerms.includes("怎么做好"), false);
+    assert.equal(spokenTerms.ftsTerms.includes("做好口播"), false);
+    assert.ok(spokenTerms.likeTerms.includes("口播"));
+    assert.equal(buildFtsQuery("怎么做好口播？"), null);
+    assert.equal(extractKnowledgeTerms("如何辞职").likeTerms.includes("如何"), false);
+    assert.ok(extractKnowledgeTerms("如何辞职").likeTerms.includes("辞职"));
+    assert.ok(extractKnowledgeTerms("什么是内容选题").ftsTerms.includes("内容选题"));
+    assert.equal(extractKnowledgeTerms("什么是内容选题").ftsTerms.some((term) => term.includes("什么")), false);
+    assert.ok(extractKnowledgeTerms("lighthouse workflow").ftsTerms.includes("lighthouse"));
+    assert.ok(extractKnowledgeTerms("口播workflow").likeTerms.includes("口播"));
+    assert.ok(extractKnowledgeTerms("口播workflow").ftsTerms.includes("workflow"));
+
+    const spoken = searchKnowledgeChunks(kb.id, "怎么做好口播？");
+    assert.ok(spoken.some((hit) => hit.path === "notes/koubo.md" && hit.content.includes("口播")));
+    assert.equal(spoken.some((hit) => hit.path === "notes/resign.md"), false);
+    assert.ok(searchKnowledgeChunks(kb.id, "口播").some((hit) => hit.path === "notes/koubo.md"));
+    assert.ok(searchKnowledgeChunks(kb.id, "口播").some((hit) => hit.path === "notes/koubo-extra.md"));
+    assert.equal(searchKnowledgeChunks(kb.id, "口播", 1).length, 1);
+    assert.ok(searchKnowledgeChunks(kb.id, "辞职").some((hit) => hit.path === "notes/resign.md" && hit.content.includes("辞职")));
+    assert.ok(searchKnowledgeChunks(kb.id, "如何辞职").some((hit) => hit.path === "notes/resign.md"));
+    assert.ok(searchKnowledgeChunks(kb.id, "怎样做好口播？").some((hit) => hit.content.includes("口播")));
+    assert.ok(searchKnowledgeChunks(kb.id, "什么是内容选题").some((hit) => hit.path === "notes/topic.md"));
+    assert.ok(searchKnowledgeChunks(kb.id, "什么是辞职").some((hit) => hit.path === "notes/resign.md"));
+    assert.equal(searchKnowledgeChunks(kb.id, "什么是辞职").some((hit) => hit.path === "notes/koubo.md"), false);
+    assert.ok(searchKnowledgeChunks(kb.id, "内容选题").some((hit) => hit.path === "notes/topic.md"));
+    assert.ok(searchKnowledgeChunks(kb.id, "lighthouse").some((hit) => hit.path === "notes/workflow.md"));
+    assert.ok(searchKnowledgeChunks(kb.id, "markdown").some((hit) => hit.content.toLowerCase().includes("markdown")));
+    const mixed = searchKnowledgeChunks(kb.id, "口播 workflow");
+    assert.equal(mixed[0]?.path, "notes/workflow.md");
+    assert.ok(searchKnowledgeChunks(kb.id, "口播workflow").some((hit) => hit.path === "notes/workflow.md"));
+    assert.equal(searchKnowledgeChunks(kb.id, "量子纠缠").length, 0);
+    assert.equal(searchKnowledgeChunks(kb.id, "xyzzyplugh").length, 0);
   });
 
   it("clones and syncs a local fixture without pushing", async () => {
