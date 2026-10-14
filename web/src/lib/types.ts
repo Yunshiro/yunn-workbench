@@ -268,6 +268,77 @@ export interface KbDocument {
   updatedAt: number;
 }
 
+export interface Board {
+  id: string;
+  name: string;
+  cardCount: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export type BoardCardKind = "link" | "note";
+export type BoardCardSource = "x" | "web" | "youtube" | "note";
+export type BoardCardStatus = "loading" | "ready" | "failed";
+
+export interface BoardCardMetrics {
+  likes?: number;
+  reposts?: number;
+  replies?: number;
+}
+
+export interface BoardCard {
+  id: string;
+  boardId: string;
+  kind: BoardCardKind;
+  source: BoardCardSource;
+  status: BoardCardStatus;
+  url: string | null;
+  title: string;
+  authorName: string;
+  authorHandle: string;
+  authorAvatar: string | null;
+  body: string;
+  summary: string;
+  imageUrl: string | null;
+  siteName: string;
+  metrics: BoardCardMetrics | null;
+  publishedAt: number | null;
+  manual: boolean;
+  x: number;
+  y: number;
+  error: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface BoardCitation {
+  index: number;
+  cardId: string;
+  title: string;
+  excerpt: string;
+  source: BoardCardSource;
+}
+
+export interface BoardSession {
+  id: string;
+  boardId: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface BoardMessage {
+  id: string;
+  sessionId: string;
+  role: "user" | "assistant";
+  content: string;
+  citations: BoardCitation[];
+  cardIds: string[];
+  status: "running" | "done" | "error";
+  error: string | null;
+  createdAt: number;
+}
+
 export interface PromptConfigResponse {
   prompts: Record<PromptKey, string>;
   defaults: Record<PromptKey, string>;

@@ -23,6 +23,11 @@ const EVENT_TYPES = [
   "kb_deleted",
   "kb_message",
   "kb_message_delta",
+  "board_card",
+  "board_card_deleted",
+  "board_deleted",
+  "board_message",
+  "board_message_delta",
 ] as const;
 
 /** 全局只建立一条 SSE 连接，组件通过 useEvent 订阅 */

@@ -7,6 +7,7 @@ import {
   NotePencil,
   Rss,
   SlidersHorizontal,
+  SquaresFour,
 } from "@phosphor-icons/react";
 import { api } from "./lib/api";
 import { useEvent } from "./lib/sse";
@@ -18,14 +19,16 @@ import TasksView from "./views/TasksView";
 import SettingsView from "./views/SettingsView";
 import DraftsView from "./views/DraftsView";
 import KnowledgeView from "./views/KnowledgeView";
+import BoardsView from "./views/BoardsView";
 
-type View = "items" | "feeds" | "topics" | "drafts" | "knowledge" | "tasks" | "settings";
+type View = "items" | "feeds" | "topics" | "drafts" | "boards" | "knowledge" | "tasks" | "settings";
 
 const NAV: { id: View; label: string; icon: typeof Newspaper; badge?: boolean }[] = [
   { id: "items", label: "信息流", icon: Newspaper, badge: true },
   { id: "feeds", label: "订阅源", icon: Rss },
   { id: "topics", label: "选题", icon: Lightbulb },
   { id: "drafts", label: "草稿箱", icon: NotePencil },
+  { id: "boards", label: "画板", icon: SquaresFour },
   { id: "knowledge", label: "知识库", icon: Books },
   { id: "tasks", label: "任务", icon: ListChecks },
   { id: "settings", label: "Agent 设置", icon: SlidersHorizontal },
@@ -36,6 +39,7 @@ const TITLES: Record<View, string> = {
   feeds: "订阅源",
   topics: "选题看板",
   drafts: "推文草稿箱",
+  boards: "画板",
   knowledge: "知识库",
   tasks: "AI 任务",
   settings: "Agent 设置",
@@ -141,15 +145,19 @@ export default function App() {
           {view === "items" && (
             <span className="topbar__hint">勾选条目 → 底部运行 AI 任务（摘要 / 评估 / 聚类 / 找选题）</span>
           )}
+          {view === "boards" && (
+            <span className="topbar__hint">粘贴链接生成卡片，双击空白处写便签，右侧可以对着卡片提问。</span>
+          )}
           {view === "knowledge" && (
             <span className="topbar__hint">本地检索 Markdown，再用当前模型回答。仓库只读，不会写回。</span>
           )}
         </div>
-        <div className={`content${view === "knowledge" ? " content--workspace" : ""}`}>
+        <div className={`content${view === "knowledge" || view === "boards" ? " content--workspace" : ""}`}>
           {view === "items" && <ItemsView onUnreadChange={setUnread} />}
           {view === "feeds" && <FeedsView />}
           {view === "topics" && <TopicsView onCreateDraft={createDraftForTopic} />}
           {view === "drafts" && <DraftsView createForTopicId={draftTopicId} />}
+          {view === "boards" && <BoardsView />}
           {view === "knowledge" && <KnowledgeView />}
           {view === "tasks" && <TasksView />}
           {view === "settings" && <SettingsView onConfigChanged={refreshAgent} />}

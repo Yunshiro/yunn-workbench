@@ -24,6 +24,10 @@ import type {
   KbSession,
   KbMessage,
   KbDocument,
+  Board,
+  BoardCard,
+  BoardSession,
+  BoardMessage,
 } from "./types";
 
 async function parse<T>(res: Response): Promise<T> {
@@ -242,4 +246,42 @@ export const api = {
       headers: jsonHeaders,
       body: JSON.stringify({ content }),
     }).then((r) => parse<{ user: KbMessage; assistant: KbMessage }>(r)),
+
+  listBoards: () => fetch("/api/boards").then((r) => parse<Board[]>(r)),
+  createBoard: (name?: string) =>
+    fetch("/api/boards", { method: "POST", headers: jsonHeaders, body: JSON.stringify({ name }) }).then((r) => parse<Board>(r)),
+  renameBoard: (id: string, name: string) =>
+    fetch(`/api/boards/${id}`, { method: "PATCH", headers: jsonHeaders, body: JSON.stringify({ name }) }).then((r) => parse<Board>(r)),
+  deleteBoard: (id: string) => fetch(`/api/boards/${id}`, { method: "DELETE" }).then((r) => parse<{ ok: boolean }>(r)),
+  listBoardCards: (id: string) => fetch(`/api/boards/${id}/cards`).then((r) => parse<BoardCard[]>(r)),
+  addBoardLink: async (boardId: string, input: { url: string; x?: number; y?: number }): Promise<{ card: BoardCard; duplicate: boolean }> => {
+    const res = await fetch(`/api/boards/${boardId}/cards`, { method: "POST", headers: jsonHeaders, body: JSON.stringify(input) });
+    let body: { error?: string; card?: BoardCard } | BoardCard | null = null;
+    try { body = await res.json(); } catch { /* 非 JSON */ }
+    if (res.status === 409 && body && "card" in body && body.card) return { card: body.card, duplicate: true };
+    if (!res.ok) {
+      const message = body && "error" in body && typeof body.error === "string" ? body.error : `请求失败（${res.status}）`;
+      throw new Error(message);
+    }
+    return { card: body as BoardCard, duplicate: false };
+  },
+  addBoardNote: (boardId: string, input: { x?: number; y?: number; body?: string }) =>
+    fetch(`/api/boards/${boardId}/cards`, { method: "POST", headers: jsonHeaders, body: JSON.stringify({ kind: "note", ...input }) }).then((r) => parse<BoardCard>(r)),
+  updateBoardCard: (boardId: string, cardId: string, input: { body?: string; x?: number; y?: number }) =>
+    fetch(`/api/boards/${boardId}/cards/${cardId}`, { method: "PATCH", headers: jsonHeaders, body: JSON.stringify(input) }).then((r) => parse<BoardCard>(r)),
+  retryBoardCard: (boardId: string, cardId: string) =>
+    fetch(`/api/boards/${boardId}/cards/${cardId}/retry`, { method: "POST" }).then((r) => parse<BoardCard>(r)),
+  deleteBoardCard: (boardId: string, cardId: string) =>
+    fetch(`/api/boards/${boardId}/cards/${cardId}`, { method: "DELETE" }).then((r) => parse<{ ok: boolean }>(r)),
+  listBoardSessions: (id: string) => fetch(`/api/boards/${id}/sessions`).then((r) => parse<BoardSession[]>(r)),
+  createBoardSession: (id: string) =>
+    fetch(`/api/boards/${id}/sessions`, { method: "POST" }).then((r) => parse<BoardSession>(r)),
+  listBoardMessages: (id: string, sessionId: string) =>
+    fetch(`/api/boards/${id}/sessions/${sessionId}/messages`).then((r) => parse<BoardMessage[]>(r)),
+  sendBoardMessage: (id: string, sessionId: string, content: string, cardIds?: string[]) =>
+    fetch(`/api/boards/${id}/sessions/${sessionId}/messages`, {
+      method: "POST",
+      headers: jsonHeaders,
+      body: JSON.stringify({ content, cardIds }),
+    }).then((r) => parse<{ user: BoardMessage; assistant: BoardMessage }>(r)),
 };

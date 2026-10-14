@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const home = mkdtempSync(join(tmpdir(), "workbench-kb-test-"));
-const child = spawn(process.execPath, ["--import", "tsx", "--test", "src/knowledge-base.test.ts"], {
+const child = spawn(process.execPath, ["--import", "tsx", "--test", "--test-concurrency=1", "src/knowledge-base.test.ts", "src/boards.test.ts"], {
   cwd: dirname(fileURLToPath(import.meta.url)),
   env: { ...process.env, WORKBENCH_HOME: home },
   stdio: "inherit",

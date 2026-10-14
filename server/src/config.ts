@@ -34,6 +34,9 @@ export const KB_CREDENTIALS_DIR = join(WORKBENCH_HOME, "kb-credentials");
 /** 知识库问答的 Pi 会话目录 */
 export const KB_SESSIONS_DIR = join(WORKBENCH_HOME, "kb-sessions");
 
+/** 画板问答的 Pi 会话目录，和知识库会话分开存放 */
+export const BOARD_SESSIONS_DIR = join(WORKBENCH_HOME, "board-sessions");
+
 /** 空目录，用来禁用克隆仓库自带的 Git hooks */
 export const KB_HOOKS_DIR = join(WORKBENCH_HOME, "kb-empty-hooks");
 
