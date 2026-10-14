@@ -159,27 +159,27 @@ export default function BoardChatPanel({ boardId, cards, selectedIds, collapsed,
         {configured === false && <span className="board__chat-scope-line">请先在 Agent 设置中启用一个可用的模型</span>}
         <span className="board__chat-scope-line">{scope}</span>
       </div>
-      <div className="kb__messages board__messages" ref={threadRef}>
+      <div className="chat-thread board__messages" ref={threadRef}>
         {messages.length === 0 && (
           <p className="board__chat-empty">对着这面墙上的卡片提问。回答会标出用到的卡片，点击即可定位。</p>
         )}
         {messages.map((message) => (
-          <article key={message.id} className={`kb-msg kb-msg--${message.role}`}>
-            <div className="kb-msg__role">{message.role === "user" ? "你" : "画板"}</div>
+          <article key={message.id} className={`chat-msg chat-msg--${message.role}`}>
+            <div className="chat-msg__role">{message.role === "user" ? "你" : "画板"}</div>
             {message.status === "running" && !message.content ? (
-              <div className="kb-msg__pending"><Spinner /> 正在根据卡片回答…</div>
+              <div className="chat-msg__pending"><Spinner /> 正在根据卡片回答…</div>
             ) : (
-              <div className="kb-msg__content">{message.content}</div>
+              <div className="chat-msg__content">{message.content}</div>
             )}
-            {message.error && <div className="kb-msg__error">{message.error}</div>}
+            {message.error && <div className="chat-msg__error">{message.error}</div>}
             {message.role === "assistant" && message.citations.length > 0 && (
-              <div className="kb-sources">
-                <div className="kb-sources__label">引用的卡片</div>
+              <div className="chat-sources">
+                <div className="chat-sources__label">引用的卡片</div>
                 {message.citations.map((citation) => (
-                  <button key={`${citation.index}-${citation.cardId}`} type="button" className="kb-source" onClick={() => onFocusCard(citation.cardId)}>
+                  <button key={`${citation.index}-${citation.cardId}`} type="button" className="chat-source" onClick={() => onFocusCard(citation.cardId)}>
                     <span>
-                      <span className="kb-source__title">[{citation.index}] {citation.title}</span>
-                      {citation.excerpt && <span className="kb-source__path">{citation.excerpt}</span>}
+                      <span className="chat-source__title">[{citation.index}] {citation.title}</span>
+                      {citation.excerpt && <span className="chat-source__excerpt">{citation.excerpt}</span>}
                     </span>
                   </button>
                 ))}
@@ -188,7 +188,7 @@ export default function BoardChatPanel({ boardId, cards, selectedIds, collapsed,
           </article>
         ))}
       </div>
-      <form className="kb__composer board__composer" onSubmit={(event) => { event.preventDefault(); void handleSend(); }}>
+      <form className="chat-composer board__composer" onSubmit={(event) => { event.preventDefault(); void handleSend(); }}>
         <textarea
           value={draft}
           onChange={(event) => setDraft(event.target.value)}

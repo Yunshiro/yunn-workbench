@@ -27,8 +27,8 @@ import {
   type BoardMessage,
   type BoardSession,
 } from "./boards-db.js";
+import { selectCitations } from "./citations.js";
 import { BOARD_SESSIONS_DIR, PI_AUTH_PATH, WORKBENCH_HOME } from "./config.js";
-import { selectCitations } from "./knowledge-index.js";
 
 export type BoardAnswerRunner = (input: { prompt: string; question: string; cardIds: string[] }) => string | Promise<string>;
 

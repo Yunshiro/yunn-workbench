@@ -348,14 +348,14 @@ function AddLinkDialog({ onClose, onSubmit }: { onClose: () => void; onSubmit: (
             <X size={16} />
           </button>
         </div>
-        <div className="modal__body kb-dialog__body">
+        <div className="modal__body board-dialog__body">
           {error && <ErrorBanner message={error} />}
           <label>
             链接
             <input className="input" value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://x.com/… 或文章、YouTube 链接" required />
           </label>
-          <p className="kb-dialog__note">支持 X（x.com / twitter.com）、普通网页和 YouTube。抓取由本机服务完成。</p>
-          <div className="kb-dialog__actions">
+          <p className="board-dialog__note">支持 X（x.com / twitter.com）、普通网页和 YouTube。抓取由本机服务完成。</p>
+          <div className="board-dialog__actions">
             <button className="btn btn--ghost" type="button" onClick={onClose}>取消</button>
             <button className="btn btn--primary" type="submit" disabled={saving || !url.trim()}>
               {saving ? <Spinner /> : <Plus size={16} weight="bold" />}
@@ -380,7 +380,7 @@ function CardDetail({ card, onClose, onSave }: { card: BoardCard; onClose: () =>
             <X size={16} />
           </button>
         </div>
-        <div className="modal__body kb-dialog__body">
+        <div className="modal__body board-dialog__body">
           {card.authorName && <p className="board-detail__meta">{card.authorName}{card.authorHandle ? ` @${card.authorHandle}` : ""}</p>}
           {card.source === "x" && <p className="board-detail__meta">点赞 {card.metrics?.likes ?? 0}</p>}
           <div className="board-detail__body">{card.body || card.summary || "还没有正文"}</div>
@@ -389,9 +389,9 @@ function CardDetail({ card, onClose, onSave }: { card: BoardCard; onClose: () =>
           )}
           <label>
             编辑正文
-            <textarea className="kb-key" value={body} onChange={(event) => setBody(event.target.value)} aria-label="编辑正文" />
+            <textarea className="board-dialog__text" value={body} onChange={(event) => setBody(event.target.value)} aria-label="编辑正文" />
           </label>
-          <div className="kb-dialog__actions">
+          <div className="board-dialog__actions">
             <button className="btn btn--ghost" type="button" onClick={onClose}>关闭</button>
             <button className="btn btn--primary" type="button" onClick={() => onSave(body)}>保存</button>
           </div>

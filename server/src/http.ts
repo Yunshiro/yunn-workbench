@@ -77,8 +77,6 @@ import {
   savePromptInstruction,
   validatePromptTemplate,
 } from "./prompts.js";
-import { knowledgeEvents } from "./knowledge-events.js";
-import { mountKnowledgeRoutes } from "./knowledge-http.js";
 import { boardEvents } from "./board-events.js";
 import { mountBoardRoutes } from "./board-http.js";
 
@@ -94,7 +92,6 @@ const wrap = (fn: (req: any, res: Response) => Promise<any> | any) => {
   };
 };
 
-mountKnowledgeRoutes(app, wrap);
 mountBoardRoutes(app, wrap);
 
 // ---- 健康检查 / 状态 ----
@@ -533,10 +530,6 @@ agentEvents.on("task_done", (d) => broadcast("task_done", d));
 agentEvents.on("task_error", (d) => broadcast("task_error", d));
 agentEvents.on("tasks_deleted", (d) => broadcast("tasks_deleted", d));
 agentEvents.on("topics_created", (d) => broadcast("topics_created", d));
-knowledgeEvents.on("kb_status", (d) => broadcast("kb_status", d));
-knowledgeEvents.on("kb_deleted", (d) => broadcast("kb_deleted", d));
-knowledgeEvents.on("kb_message", (d) => broadcast("kb_message", d));
-knowledgeEvents.on("kb_message_delta", (d) => broadcast("kb_message_delta", d));
 boardEvents.on("board_card", (d) => broadcast("board_card", d));
 boardEvents.on("board_card_deleted", (d) => broadcast("board_card_deleted", d));
 boardEvents.on("board_deleted", (d) => broadcast("board_deleted", d));

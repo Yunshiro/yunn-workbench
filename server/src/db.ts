@@ -134,74 +134,6 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_research_messages_task ON research_messages(task_id, created_at);
   CREATE INDEX IF NOT EXISTS idx_research_revisions_task ON research_revisions(task_id, revision);
 
-  CREATE TABLE IF NOT EXISTS knowledge_bases (
-    id              TEXT PRIMARY KEY,
-    name            TEXT NOT NULL,
-    repo_url        TEXT NOT NULL UNIQUE,
-    auth_type       TEXT NOT NULL,          -- none | github_token | ssh_key
-    branch          TEXT,
-    local_path      TEXT NOT NULL,          -- relative to WORKBENCH_HOME
-    status          TEXT NOT NULL,          -- pending | syncing | ready | error
-    last_synced_at  INTEGER,
-    last_error      TEXT,
-    commit_sha      TEXT,
-    file_count      INTEGER NOT NULL DEFAULT 0,
-    chunk_count     INTEGER NOT NULL DEFAULT 0,
-    created_at      INTEGER NOT NULL,
-    updated_at      INTEGER NOT NULL
-  );
-
-  CREATE TABLE IF NOT EXISTS kb_documents (
-    id            TEXT PRIMARY KEY,
-    kb_id         TEXT NOT NULL REFERENCES knowledge_bases(id) ON DELETE CASCADE,
-    path          TEXT NOT NULL,
-    title         TEXT NOT NULL,
-    content       TEXT NOT NULL,
-    content_hash  TEXT NOT NULL,
-    frontmatter   TEXT,
-    updated_at    INTEGER NOT NULL,
-    UNIQUE (kb_id, path)
-  );
-
-  CREATE TABLE IF NOT EXISTS kb_chunks (
-    id            TEXT PRIMARY KEY,
-    kb_id         TEXT NOT NULL REFERENCES knowledge_bases(id) ON DELETE CASCADE,
-    document_id   TEXT NOT NULL REFERENCES kb_documents(id) ON DELETE CASCADE,
-    path          TEXT NOT NULL,
-    title         TEXT NOT NULL,
-    heading       TEXT,
-    chunk_index   INTEGER NOT NULL,
-    content       TEXT NOT NULL,
-    start_line    INTEGER NOT NULL,
-    end_line      INTEGER NOT NULL
-  );
-
-  CREATE TABLE IF NOT EXISTS kb_sessions (
-    id              TEXT PRIMARY KEY,
-    kb_id           TEXT NOT NULL REFERENCES knowledge_bases(id) ON DELETE CASCADE,
-    title           TEXT NOT NULL,
-    pi_session_id   TEXT,
-    pi_session_path TEXT,
-    created_at      INTEGER NOT NULL,
-    updated_at      INTEGER NOT NULL
-  );
-
-  CREATE TABLE IF NOT EXISTS kb_messages (
-    id            TEXT PRIMARY KEY,
-    session_id    TEXT NOT NULL REFERENCES kb_sessions(id) ON DELETE CASCADE,
-    role          TEXT NOT NULL,            -- user | assistant
-    content       TEXT NOT NULL,
-    citations     TEXT,
-    status        TEXT NOT NULL,            -- running | done | error
-    error         TEXT,
-    created_at    INTEGER NOT NULL
-  );
-
-  CREATE INDEX IF NOT EXISTS idx_kb_documents_kb ON kb_documents(kb_id, path);
-  CREATE INDEX IF NOT EXISTS idx_kb_chunks_kb ON kb_chunks(kb_id, chunk_index);
-  CREATE INDEX IF NOT EXISTS idx_kb_sessions_kb ON kb_sessions(kb_id, updated_at DESC);
-  CREATE INDEX IF NOT EXISTS idx_kb_messages_session ON kb_messages(session_id, created_at);
-
   CREATE TABLE IF NOT EXISTS boards (
     id          TEXT PRIMARY KEY,
     name        TEXT NOT NULL,
@@ -263,18 +195,8 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_board_messages_session ON board_messages(session_id, created_at);
 `);
 
-// FTS5 单独创建：trigram 分词适合中文检索。Node 24 自带该分词器。
-db.exec(`
-  CREATE VIRTUAL TABLE IF NOT EXISTS kb_chunks_fts USING fts5(
-    chunk_id UNINDEXED,
-    kb_id UNINDEXED,
-    path,
-    title,
-    heading,
-    content,
-    tokenize = 'trigram'
-  );
-`);
+// 旧版知识库留下的表（knowledge_bases、kb_documents、kb_chunks、kb_chunks_fts、
+// kb_sessions、kb_messages）如果已经存在，启动时保持原样，不删除、不改写、也不再读写。
 
 // Lightweight forward migration for databases created before research traces existed.
 const taskColumns = db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>;
