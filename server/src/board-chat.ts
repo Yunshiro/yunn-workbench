@@ -30,6 +30,15 @@ import {
 import { BOARD_SESSIONS_DIR, PI_AUTH_PATH, WORKBENCH_HOME } from "./config.js";
 import { selectCitations } from "./knowledge-index.js";
 
+export type BoardAnswerRunner = (input: { prompt: string; question: string; cardIds: string[] }) => string | Promise<string>;
+
+let answerRunnerForTests: BoardAnswerRunner | null = null;
+
+/** 测试里代替 Pi 会话。传入 null 恢复真实模型。 */
+export function setBoardAnswerRunnerForTests(runner: BoardAnswerRunner | null): void {
+  answerRunnerForTests = runner;
+}
+
 const BOARD_SYSTEM_PROMPT = `你是 Yunn Workbench 的画板助手。只根据本次提供的卡片内容分析素材，并可以据此起草文案。
 规则：
 1. 只使用卡片里的信息，不要编造卡片中没有的内容。
@@ -111,7 +120,7 @@ export async function askBoard(boardId: string, sessionId: string, content: stri
   if (question.length > 4000) throw new BoardError("单条问题不能超过 4000 字");
   const session = getBoardSession(sessionId);
   if (!session || session.boardId !== boardId) throw new BoardError("会话不存在", 404);
-  if (!getAgentAuthConfig().configured) throw new BoardError("请先在 Agent 设置中启用一个可用的模型");
+  if (!answerRunnerForTests && !getAgentAuthConfig().configured) throw new BoardError("请先在 Agent 设置中启用一个可用的模型");
   if (hasRunningBoardMessage(sessionId)) throw new BoardError("上一个回答还在生成", 409);
 
   const contextWindow = await resolveContextWindow();
@@ -138,7 +147,30 @@ export async function askBoard(boardId: string, sessionId: string, content: stri
   return { user, assistant };
 }
 
+async function finishAnswer(sessionId: string, messageId: string, prepared: BoardContext, answer: string): Promise<void> {
+  const text = answer.trim();
+  if (!text) throw new Error("模型没有返回内容");
+  const shown = selectCitations(text, prepared.citations);
+  const saved = updateBoardMessage(messageId, { content: text, citations: shown, status: "done", error: null });
+  if (saved) boardEvents.emit("board_message", { sessionId, message: saved });
+}
+
 async function completeAnswer(sessionId: string, messageId: string, question: string, prepared: BoardContext): Promise<void> {
+  if (answerRunnerForTests) {
+    try {
+      const answer = await answerRunnerForTests({
+        prompt: prepared.prompt,
+        question,
+        cardIds: prepared.cards.map((card) => card.id),
+      });
+      await finishAnswer(sessionId, messageId, prepared, answer);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const saved = updateBoardMessage(messageId, { status: "error", error: message });
+      if (saved) boardEvents.emit("board_message", { sessionId, message: saved });
+    }
+    return;
+  }
   const session = getBoardSession(sessionId);
   if (!session) return;
   let sessionHandle: AgentSession | null = null;
@@ -185,11 +217,7 @@ async function completeAnswer(sessionId: string, messageId: string, question: st
     } finally {
       unsubscribe();
     }
-    const answer = latest.trim();
-    if (!answer) throw new Error("模型没有返回内容");
-    const shown = selectCitations(answer, prepared.citations);
-    const saved = updateBoardMessage(messageId, { content: answer, citations: shown, status: "done", error: null });
-    if (saved) boardEvents.emit("board_message", { sessionId, message: saved });
+    await finishAnswer(sessionId, messageId, prepared, latest);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const current = getBoardMessage(messageId);

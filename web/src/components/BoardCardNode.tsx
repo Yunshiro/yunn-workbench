@@ -176,7 +176,15 @@ function BoardCardNodeView({ data }: NodeProps<BoardCardNodeData>) {
       <CardBody card={card} />
       <div className="board-card__actions nodrag nopan">
         {card.url && (
-          <a className="btn btn--ghost btn--sm" href={card.url} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>
+          <a
+            className="btn btn--ghost btn--sm nodrag nopan"
+            href={card.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            onPointerDownCapture={(event) => event.stopPropagation()}
+            onMouseDownCapture={(event) => event.stopPropagation()}
+            onClick={(event) => event.stopPropagation()}
+          >
             <ArrowSquareOut size={14} />
             原文
           </a>

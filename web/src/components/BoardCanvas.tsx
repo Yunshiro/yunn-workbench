@@ -30,6 +30,7 @@ interface BoardCanvasProps {
   onSaveBody: (id: string, body: string) => void;
   onOpen: (card: BoardCard) => void;
   onSelectionChange: (ids: string[]) => void;
+  noteRequest: number;
 }
 
 function BoardFlow(props: BoardCanvasProps) {
@@ -46,6 +47,7 @@ function BoardFlow(props: BoardCanvasProps) {
     onSaveBody,
     onOpen,
     onSelectionChange,
+    noteRequest,
   } = props;
   const [nodes, setNodes, onNodesChange] = useNodesState<BoardCardNodeData>([]);
   const { screenToFlowPosition, setCenter, fitView } = useReactFlow();
@@ -88,6 +90,17 @@ function BoardFlow(props: BoardCanvasProps) {
   const onCreateNoteRef = useRef(onCreateNote);
   onCreateLinkRef.current = onCreateLink;
   onCreateNoteRef.current = onCreateNote;
+  const seenNoteRequest = useRef(noteRequest);
+
+  useEffect(() => {
+    if (noteRequest === seenNoteRequest.current) return;
+    seenNoteRequest.current = noteRequest;
+    const bounds = canvasRef.current?.getBoundingClientRect();
+    const position = bounds
+      ? screenToFlowPosition({ x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 })
+      : { x: 120, y: 120 };
+    onCreateNoteRef.current(position);
+  }, [noteRequest, screenToFlowPosition]);
 
   useEffect(() => {
     function onPaste(event: ClipboardEvent) {

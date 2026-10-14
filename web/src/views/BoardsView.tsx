@@ -28,6 +28,7 @@ export default function BoardsView() {
   const [chatOpen, setChatOpen] = useState(true);
   const [adding, setAdding] = useState(false);
   const [detail, setDetail] = useState<BoardCard | null>(null);
+  const [noteRequest, setNoteRequest] = useState(0);
   const [nameDraft, setNameDraft] = useState("");
   const selectedRef = useRef<string | null>(null);
   selectedRef.current = selectedId;
@@ -258,7 +259,7 @@ export default function BoardsView() {
                 <Link size={14} />
                 添加链接
               </button>
-              <button className="btn btn--ghost btn--sm" type="button" onClick={() => void handleCreateNote()}>
+              <button className="btn btn--ghost btn--sm" type="button" onClick={() => setNoteRequest((current) => current + 1)}>
                 <NotePencil size={14} />
                 新建便签
               </button>
@@ -287,6 +288,7 @@ export default function BoardsView() {
               onRetry={(id) => void handleRetry(id)}
               onSaveBody={(id, body) => void saveBody(id, body)}
               onOpen={setDetail}
+              noteRequest={noteRequest}
               onSelectionChange={(ids) => {
                 setSelectedCardIds((current) => current.length === ids.length && current.every((id, index) => id === ids[index]) ? current : ids);
               }}
@@ -383,7 +385,7 @@ function CardDetail({ card, onClose, onSave }: { card: BoardCard; onClose: () =>
           {card.source === "x" && <p className="board-detail__meta">点赞 {card.metrics?.likes ?? 0}</p>}
           <div className="board-detail__body">{card.body || card.summary || "还没有正文"}</div>
           {card.url && (
-            <a className="btn btn--ghost" href={card.url} target="_blank" rel="noreferrer">在新标签页打开原文</a>
+            <a className="btn btn--ghost" href={card.url} target="_blank" rel="noopener noreferrer">在新标签页打开原文</a>
           )}
           <label>
             编辑正文

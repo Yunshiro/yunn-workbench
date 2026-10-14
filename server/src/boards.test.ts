@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import type { Server } from "node:http";
 import { after, before, describe, it } from "node:test";
 import { getAgentAuthConfig } from "./agent-auth.js";
-import { askBoard } from "./board-chat.js";
+import { askBoard, setBoardAnswerRunnerForTests } from "./board-chat.js";
 import { collectBoardContext } from "./board-context.js";
 import { classifyBoardLink, setBoardFetchTimeoutForTests } from "./board-link.js";
 import { getBoardCard, getBoardSession, insertBoardMessage, updateBoardSession } from "./boards-db.js";
@@ -65,6 +65,26 @@ async function route(url: string, init?: RequestInit): Promise<Response> {
     if (id === "777") return flags.retryReady ? json(tweet("Ada", "重试后的正文", 9)) : new Response("unavailable", { status: 503 });
     if (!flags.xUp) return new Response("unavailable", { status: 503 });
     if (id === "111") return json(tweet("Ada", "这条开头先抛一个反常识。", 128));
+    if (id === "1585841080431321088") {
+      return json({
+        code: 200,
+        tweet: {
+          text: "Twitter HQ",
+          author: { name: "Elon Musk", screen_name: "elonmusk", avatar_url: "https://example.com/elon.jpg" },
+          likes: 250000,
+          retweets: 20000,
+          replies: 8000,
+          created_timestamp: 1667000000,
+          media: {
+            photos: [],
+            videos: [{
+              thumbnail_url: "https://pbs.twimg.com/amplify_video_thumb/twitter-hq.jpg",
+              url: "https://video.twimg.com/amplify_video/twitter-hq.mp4",
+            }],
+          },
+        },
+      });
+    }
     if (id === "222") return json(tweet("Bea", "第二条正文。", 3));
     return json(tweet("Ada", `帖子 ${id}`, 1));
   }
@@ -334,6 +354,87 @@ describe("boards", { concurrency: 1 }, () => {
       assert.ok(Date.now() - started < 4000);
     } finally {
       setBoardFetchTimeoutForTests(null);
+    }
+  });
+
+  it("uses a video thumbnail as the X card cover", async () => {
+    flags.xUp = true;
+    const board = (await call("/api/boards", { method: "POST", body: JSON.stringify({ name: "视频" }) })).body;
+    const created = (await call(`/api/boards/${board.id}/cards`, {
+      method: "POST",
+      body: JSON.stringify({ url: "https://x.com/elonmusk/status/1585841080431321088" }),
+    })).body;
+    const ready = await waitCard(board.id, created.id, (card) => card.status === "ready");
+    assert.equal(ready.authorName, "Elon Musk");
+    assert.equal(ready.authorHandle, "elonmusk");
+    assert.equal(ready.authorAvatar, "https://example.com/elon.jpg");
+    assert.equal(ready.body, "Twitter HQ");
+    assert.equal(ready.imageUrl, "https://pbs.twimg.com/amplify_video_thumb/twitter-hq.jpg");
+    assert.notEqual(ready.imageUrl, ready.authorAvatar);
+  });
+
+  it("offsets cards that would otherwise stack on the same point", async () => {
+    const board = (await call("/api/boards", { method: "POST", body: JSON.stringify({ name: "排开" }) })).body;
+    const points = [];
+    for (const body of ["第一张", "第二张", "第三张"]) {
+      const note = await call(`/api/boards/${board.id}/cards`, {
+        method: "POST",
+        body: JSON.stringify({ kind: "note", x: 120, y: 80, body }),
+      });
+      points.push(note.body);
+    }
+    assert.equal(points[0].x, 120);
+    assert.equal(points[0].y, 80);
+    const keys = points.map((card) => `${card.x},${card.y}`);
+    assert.equal(new Set(keys).size, 3);
+    for (const card of points) {
+      assert.ok(card.x >= 120 && card.x < 120 + 300 * 3);
+      assert.ok(card.y >= 80 && card.y < 80 + 200 * 3);
+    }
+  });
+
+  it("mocked answer cites only the selected cards", async () => {
+    const seen: { prompt: string; cardIds: string[] } = { prompt: "", cardIds: [] };
+    setBoardAnswerRunnerForTests(async ({ prompt, cardIds }) => {
+      seen.prompt = prompt;
+      seen.cardIds = cardIds;
+      return "先看 [1]。";
+    });
+    try {
+      const board = (await call("/api/boards", { method: "POST", body: JSON.stringify({ name: "模拟对话" }) })).body;
+      const ids: string[] = [];
+      for (const body of ["ONLY_A 提问", "ONLY_B 结论", "ONLY_C 排除"]) {
+        const note = await call(`/api/boards/${board.id}/cards`, {
+          method: "POST",
+          body: JSON.stringify({ kind: "note", body }),
+        });
+        ids.push(note.body.id);
+      }
+      const session = (await call(`/api/boards/${board.id}/sessions`, { method: "POST" })).body;
+      const sent = await call(`/api/boards/${board.id}/sessions/${session.id}/messages`, {
+        method: "POST",
+        body: JSON.stringify({ content: "这些卡片在说什么？", cardIds: [ids[0], ids[1]] }),
+      });
+      assert.equal(sent.res.status, 201);
+      const start = Date.now();
+      let assistant: any = null;
+      while (Date.now() - start < 4000) {
+        const messages = await call(`/api/boards/${board.id}/sessions/${session.id}/messages`);
+        assistant = (messages.body as any[]).find((message) => message.role === "assistant");
+        if (assistant && assistant.status === "done") break;
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      assert.equal(assistant?.status, "done");
+      assert.match(assistant.content, /\[1\]/);
+      assert.deepEqual(seen.cardIds, [ids[0], ids[1]]);
+      assert.equal(seen.prompt.includes("ONLY_A"), true);
+      assert.equal(seen.prompt.includes("ONLY_B"), true);
+      assert.equal(seen.prompt.includes("ONLY_C"), false);
+      assert.equal(assistant.citations.length, 1);
+      assert.equal(assistant.citations[0].cardId, ids[0]);
+      assert.equal(assistant.citations[0].index, 1);
+    } finally {
+      setBoardAnswerRunnerForTests(null);
     }
   });
 

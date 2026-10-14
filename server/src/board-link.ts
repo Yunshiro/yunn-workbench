@@ -165,8 +165,7 @@ async function fetchX(classified: ClassifiedLink, deadline: number): Promise<Omi
   const text = String(tweet?.text || tweet?.raw_text?.text || "").trim();
   if (!tweet || !text) throw new BoardError("抓取失败");
   const author = tweet.author || {};
-  const photos = Array.isArray(tweet.media?.photos) ? tweet.media.photos : Array.isArray(tweet.media?.all) ? tweet.media.all : [];
-  const image = photos.find((item: { url?: string }) => typeof item?.url === "string")?.url;
+  const image = tweetCover(tweet);
   return {
     title: author.name ? `${String(author.name)} 的帖子` : "X 帖子",
     authorName: String(author.name || "").trim(),
@@ -334,6 +333,29 @@ function decodeEntities(value: string): string {
       const code = Number.parseInt(hex, 16);
       return Number.isFinite(code) ? String.fromCodePoint(code) : _;
     });
+}
+
+function firstHttp(items: unknown[], key: "url" | "thumbnail_url"): string | undefined {
+  if (!Array.isArray(items)) return undefined;
+  for (const item of items) {
+    if (!item || typeof item !== "object") continue;
+    const value = (item as Record<string, unknown>)[key];
+    if (typeof value === "string" && value.trim()) return value;
+  }
+  return undefined;
+}
+
+/** 图片优先用照片；纯视频帖用 FxTwitter 的 thumbnail_url 当封面。 */
+function tweetCover(tweet: { media?: { photos?: unknown; videos?: unknown; video?: unknown; all?: unknown } }): string | undefined {
+  const media = tweet.media || {};
+  const photos = Array.isArray(media.photos) ? media.photos : [];
+  const photo = firstHttp(photos, "url");
+  if (photo) return photo;
+  const videos = Array.isArray(media.videos) ? media.videos : media.video ? [media.video] : [];
+  const thumbnail = firstHttp(videos, "thumbnail_url");
+  if (thumbnail) return thumbnail;
+  const all = Array.isArray(media.all) ? media.all : [];
+  return firstHttp(all, "thumbnail_url") || firstHttp(all, "url") || firstHttp(photos, "thumbnail_url");
 }
 
 function httpUrl(value: unknown, base?: string): string | null {

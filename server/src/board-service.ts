@@ -215,15 +215,35 @@ function requireCoord(value: unknown): number {
   return Math.max(-20000, Math.min(20000, number));
 }
 
+const CARD_SPAN_X = 300;
+const CARD_SPAN_Y = 200;
+
+function spotTaken(cards: BoardCard[], x: number, y: number): boolean {
+  return cards.some((card) => Math.abs(card.x - x) < CARD_SPAN_X && Math.abs(card.y - y) < CARD_SPAN_Y);
+}
+
+/** 从锚点往右、再往下找一个不和现有卡片叠在一起的位置。 */
+function placeNear(boardId: string, anchor: { x: number; y: number }): { x: number; y: number } {
+  const cards = listBoardCards(boardId);
+  for (let index = 0; index < 48; index += 1) {
+    const column = index % 3;
+    const row = Math.floor(index / 3);
+    const x = anchor.x + column * CARD_SPAN_X;
+    const y = anchor.y + row * CARD_SPAN_Y;
+    if (!spotTaken(cards, x, y)) return { x, y };
+  }
+  return anchor;
+}
+
 function resolvePosition(boardId: string, x: unknown, y: unknown): { x: number; y: number } {
   if (x !== undefined || y !== undefined) {
-    return {
+    return placeNear(boardId, {
       x: x === undefined ? 80 : requireCoord(x),
       y: y === undefined ? 80 : requireCoord(y),
-    };
+    });
   }
   const count = countBoardCards(boardId);
   const column = count % 3;
   const row = Math.floor(count / 3);
-  return { x: 48 + column * 340, y: 48 + row * 360 };
+  return placeNear(boardId, { x: 48 + column * 340, y: 48 + row * 360 });
 }
