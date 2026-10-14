@@ -201,6 +201,66 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_kb_chunks_kb ON kb_chunks(kb_id, chunk_index);
   CREATE INDEX IF NOT EXISTS idx_kb_sessions_kb ON kb_sessions(kb_id, updated_at DESC);
   CREATE INDEX IF NOT EXISTS idx_kb_messages_session ON kb_messages(session_id, created_at);
+
+  CREATE TABLE IF NOT EXISTS boards (
+    id          TEXT PRIMARY KEY,
+    name        TEXT NOT NULL,
+    created_at  INTEGER NOT NULL,
+    updated_at  INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS board_cards (
+    id             TEXT PRIMARY KEY,
+    board_id       TEXT NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
+    kind           TEXT NOT NULL,            -- link | note
+    source         TEXT NOT NULL,            -- x | web | youtube | note
+    status         TEXT NOT NULL,            -- loading | ready | failed
+    url            TEXT,
+    dedupe_key     TEXT NOT NULL,
+    title          TEXT NOT NULL DEFAULT '',
+    author_name    TEXT NOT NULL DEFAULT '',
+    author_handle  TEXT NOT NULL DEFAULT '',
+    author_avatar  TEXT,
+    body           TEXT NOT NULL DEFAULT '',
+    summary        TEXT NOT NULL DEFAULT '',
+    image_url      TEXT,
+    site_name      TEXT NOT NULL DEFAULT '',
+    metrics_json   TEXT,
+    published_at   INTEGER,
+    manual         INTEGER NOT NULL DEFAULT 0,
+    position_x     REAL NOT NULL DEFAULT 0,
+    position_y     REAL NOT NULL DEFAULT 0,
+    error          TEXT,
+    created_at     INTEGER NOT NULL,
+    updated_at     INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS board_sessions (
+    id              TEXT PRIMARY KEY,
+    board_id        TEXT NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
+    title           TEXT NOT NULL,
+    pi_session_id   TEXT,
+    pi_session_path TEXT,
+    created_at      INTEGER NOT NULL,
+    updated_at      INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS board_messages (
+    id            TEXT PRIMARY KEY,
+    session_id    TEXT NOT NULL REFERENCES board_sessions(id) ON DELETE CASCADE,
+    role          TEXT NOT NULL,             -- user | assistant
+    content       TEXT NOT NULL,
+    citations     TEXT,
+    card_ids      TEXT,
+    status        TEXT NOT NULL,             -- running | done | error
+    error         TEXT,
+    created_at    INTEGER NOT NULL
+  );
+
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_board_cards_dedupe ON board_cards(board_id, dedupe_key);
+  CREATE INDEX IF NOT EXISTS idx_board_cards_board ON board_cards(board_id, created_at);
+  CREATE INDEX IF NOT EXISTS idx_board_sessions_board ON board_sessions(board_id, updated_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_board_messages_session ON board_messages(session_id, created_at);
 `);
 
 // FTS5 单独创建：trigram 分词适合中文检索。Node 24 自带该分词器。

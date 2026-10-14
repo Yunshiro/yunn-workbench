@@ -79,6 +79,8 @@ import {
 } from "./prompts.js";
 import { knowledgeEvents } from "./knowledge-events.js";
 import { mountKnowledgeRoutes } from "./knowledge-http.js";
+import { boardEvents } from "./board-events.js";
+import { mountBoardRoutes } from "./board-http.js";
 
 export const app = express();
 app.use(cors());
@@ -93,6 +95,7 @@ const wrap = (fn: (req: any, res: Response) => Promise<any> | any) => {
 };
 
 mountKnowledgeRoutes(app, wrap);
+mountBoardRoutes(app, wrap);
 
 // ---- 健康检查 / 状态 ----
 
@@ -534,3 +537,8 @@ knowledgeEvents.on("kb_status", (d) => broadcast("kb_status", d));
 knowledgeEvents.on("kb_deleted", (d) => broadcast("kb_deleted", d));
 knowledgeEvents.on("kb_message", (d) => broadcast("kb_message", d));
 knowledgeEvents.on("kb_message_delta", (d) => broadcast("kb_message_delta", d));
+boardEvents.on("board_card", (d) => broadcast("board_card", d));
+boardEvents.on("board_card_deleted", (d) => broadcast("board_card_deleted", d));
+boardEvents.on("board_deleted", (d) => broadcast("board_deleted", d));
+boardEvents.on("board_message", (d) => broadcast("board_message", d));
+boardEvents.on("board_message_delta", (d) => broadcast("board_message_delta", d));
