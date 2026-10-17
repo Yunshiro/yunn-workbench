@@ -153,7 +153,7 @@ async function requestMerge(bookType: BookType, title: string, partials: Chapter
   if (!(bookType === "fiction" ? note.plot : note.summary)) {
     throw new ReadingError("模型没有返回可用的章节笔记。", 502, true);
   }
-  return { ...note, quotes: [], droppedQuoteCount: 0 };
+  return { ...note, kind: bookType, quotes: [], droppedQuoteCount: 0 };
 }
 
 function parseChapter(bookType: BookType, title: string, chapterIndex: number, text: string, raw: string): ChapterNote {

@@ -247,9 +247,9 @@ const nested = () => chapterBook({
   spine: ["a.xhtml", "b.xhtml", "c.xhtml", "d.xhtml"],
   files: {
     "a.xhtml": xhtml("<p>第1章 开端</p><p>开端这一句会留在合并后的第一章里面，用来核对原句。</p>"),
-    "b.xhtml": xhtml("<p>小节甲</p><p>小节甲把一个可以核对的句子放在这里。</p>"),
-    "c.xhtml": xhtml("<p>小节乙</p><p>小节乙也有一句必须能在原文里找到的话。</p>"),
-    "d.xhtml": xhtml("<p>第2章 收束</p><p>收束这一句单独留在第二章，不被上一章吞掉。</p>"),
+    "b.xhtml": xhtml("<p>小节甲</p><p>小节甲把一个可以核对的句子放在这里，后面还补了一句。</p>"),
+    "c.xhtml": xhtml("<p>小节乙</p><p>小节乙也有一句必须能在原文里找到的话，后面还补了一句。</p>"),
+    "d.xhtml": xhtml("<p>第2章 收束</p><p>收束这一句单独留在第二章，不被上一章吞掉，后面还补了一句。</p>"),
   },
 });
 
@@ -326,9 +326,9 @@ describe("reading epub", () => {
       ],
       spine: ["s1.xhtml", "s2.xhtml", "s3.xhtml"],
       files: {
-        "s1.xhtml": xhtml("<p>传播过度的社会里，这句话必须留在自己的章节。</p>"),
-        "s2.xhtml": xhtml("<p>过度简化的心智里，另一句话不能并进上一节。</p>"),
-        "s3.xhtml": xhtml("<p>尽量简化信息这一节仍然是独立的一章。</p>"),
+        "s1.xhtml": xhtml("<p>传播过度的社会里，这句话必须留在自己的章节，不能并进别的章。</p>"),
+        "s2.xhtml": xhtml("<p>过度简化的心智里，另一句话不能并进上一节，要单独成章。</p>"),
+        "s3.xhtml": xhtml("<p>尽量简化信息这一节仍然是独立的一章，正文写得足够长。</p>"),
       },
     }));
     assert.equal(parsed.title, "定位");
@@ -351,7 +351,7 @@ describe("reading epub", () => {
       ncx: false,
       spine: ["all.xhtml"],
       files: {
-        "all.xhtml": xhtml("<h1>第三章 海边</h1><p>海风把这句可以核对的话留在岸边。</p><h1>第四章 山里</h1><p>山路把另一句可以核对的话藏进雾里。</p>"),
+        "all.xhtml": xhtml("<h1>第三章 海边</h1><p>海风把这句可以核对的话留在岸边，这段写得足够长。</p><h1>第四章 山里</h1><p>山路把另一句可以核对的话藏进雾里，这段也写得足够长。</p>"),
       },
     }));
     assert.equal(parsed.splitSource, "spine");
@@ -369,7 +369,7 @@ describe("reading epub", () => {
       ],
       spine: ["body.xhtml"],
       files: {
-        "body.xhtml": xhtml("<p>第五章 城里</p><p>城里这一句是正文里真实的章节标题。</p><p>第六章 郊外</p><p>郊外这一句跟在后面，不能丢。</p>"),
+        "body.xhtml": xhtml("<p>第五章 城里</p><p>城里这一句是正文里真实的章节标题，这段写得足够长。</p><p>第六章 郊外</p><p>郊外这一句跟在后面，不能丢，这段也写得足够长。</p>"),
       },
     }));
     assert.equal(parsed.splitSource, "spine");
@@ -390,7 +390,7 @@ describe("reading epub", () => {
     const fontsOnly = pack({
       "OEBPS/content.opf": opf({ title: "只有字体混淆", spine: ["ch.xhtml"] }),
       "OEBPS/toc.ncx": ncx([{ title: "第一章 正文", href: "ch.xhtml", fragment: null, children: [] }]),
-      "OEBPS/ch.xhtml": xhtml("<p>字体被混淆时正文仍然可以读，这句话留在章节里。</p>"),
+      "OEBPS/ch.xhtml": xhtml("<p>字体被混淆时正文仍然可以读，这句话留在章节里，后面还有一句。</p>"),
     }, {
       "META-INF/encryption.xml": `<?xml version="1.0"?><encryption><EncryptedData><EncryptionMethod Algorithm="http://www.idpf.org/2008/embedding"/><CipherData><CipherReference URI="OEBPS/font.otf"/></CipherData></EncryptedData></encryption>`,
     });
@@ -403,7 +403,7 @@ describe("reading epub", () => {
       title: "一本没写类型的书",
       toc: spine.map((href, index) => ({ title: `第${index + 1}章`, href, fragment: null, children: [] })),
       spine,
-      files: Object.fromEntries(spine.map((href, index) => [href, xhtml(`<p>第${index + 1}章把这一句写得足够长，用来当成正文。</p>`)])),
+      files: Object.fromEntries(spine.map((href, index) => [href, xhtml(`<p>第${index + 1}章把这一句写得足够长，用来当成可以阅读的正文。</p>`)])),
     }));
     assert.equal(parsed.bookType, "fiction");
     assert.equal(parsed.chapters.length, 8);
@@ -464,9 +464,9 @@ describe("reading flow", () => {
       ],
       spine: ["c1.xhtml", "c2.xhtml", "c3.xhtml"],
       files: {
-        "c1.xhtml": xhtml("<p>第一章留下一句可以核对的原话，用来证明没有重跑。</p>"),
-        "c2.xhtml": xhtml("<p>第二章留下一句可以核对的原话，失败后还要再试。</p>"),
-        "c3.xhtml": xhtml("<p>第三章留下一句可以核对的原话，合并后仍在同一章。</p>"),
+        "c1.xhtml": xhtml("<p>第一章留下一句可以核对的原话，用来证明没有重跑，后面还有一句。</p>"),
+        "c2.xhtml": xhtml("<p>第二章留下一句可以核对的原话，失败后还要再试，后面还有一句。</p>"),
+        "c3.xhtml": xhtml("<p>第三章留下一句可以核对的原话，合并后仍在同一章，后面还有一句。</p>"),
       },
     }));
     const merged = mergeReadingChapter(book.id, book.chapters[1].id);
@@ -636,7 +636,7 @@ describe("reading http", () => {
     const response = await fetch(`${baseUrl}/api/books`, {
       method: "POST",
       headers: { "Content-Type": "application/epub+zip" },
-      body,
+      body: new Uint8Array(body),
     });
     const text = await response.text();
     return { response, body: text ? JSON.parse(text) : null };
