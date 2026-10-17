@@ -193,6 +193,69 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_board_cards_board ON board_cards(board_id, created_at);
   CREATE INDEX IF NOT EXISTS idx_board_sessions_board ON board_sessions(board_id, updated_at DESC);
   CREATE INDEX IF NOT EXISTS idx_board_messages_session ON board_messages(session_id, created_at);
+
+  CREATE TABLE IF NOT EXISTS books (
+    id                TEXT PRIMARY KEY,
+    title             TEXT NOT NULL,
+    author            TEXT NOT NULL DEFAULT '',
+    language          TEXT NOT NULL DEFAULT '',
+    book_type         TEXT NOT NULL,
+    book_type_source  TEXT NOT NULL,
+    status            TEXT NOT NULL,
+    error             TEXT,
+    split_source      TEXT NOT NULL,
+    split_level       INTEGER,
+    levels_json       TEXT NOT NULL DEFAULT '[]',
+    toc_json          TEXT NOT NULL DEFAULT '[]',
+    confirmed         INTEGER NOT NULL DEFAULT 0,
+    created_at        INTEGER NOT NULL,
+    updated_at        INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS book_documents (
+    id            TEXT PRIMARY KEY,
+    book_id       TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+    position      INTEGER NOT NULL,
+    href          TEXT NOT NULL,
+    text          TEXT NOT NULL,
+    anchors_json  TEXT NOT NULL DEFAULT '[]',
+    headings_json TEXT NOT NULL DEFAULT '[]',
+    UNIQUE (book_id, position)
+  );
+
+  CREATE TABLE IF NOT EXISTS book_chapters (
+    id            TEXT PRIMARY KEY,
+    book_id       TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+    position      INTEGER NOT NULL,
+    title         TEXT NOT NULL,
+    start_doc     INTEGER NOT NULL,
+    start_offset  INTEGER NOT NULL,
+    end_doc       INTEGER NOT NULL,
+    end_offset    INTEGER NOT NULL,
+    text          TEXT NOT NULL,
+    char_count    INTEGER NOT NULL,
+    note_status   TEXT NOT NULL DEFAULT 'pending',
+    note_error    TEXT,
+    created_at    INTEGER NOT NULL,
+    updated_at    INTEGER NOT NULL,
+    UNIQUE (book_id, position)
+  );
+
+  CREATE TABLE IF NOT EXISTS book_notes (
+    id            TEXT PRIMARY KEY,
+    book_id       TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+    chapter_id    TEXT REFERENCES book_chapters(id) ON DELETE CASCADE,
+    kind          TEXT NOT NULL,
+    content_json  TEXT NOT NULL,
+    created_at    INTEGER NOT NULL,
+    updated_at    INTEGER NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_book_documents_book ON book_documents(book_id, position);
+  CREATE INDEX IF NOT EXISTS idx_book_chapters_book ON book_chapters(book_id, position);
+  CREATE INDEX IF NOT EXISTS idx_book_notes_book ON book_notes(book_id, created_at);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_book_notes_chapter ON book_notes(chapter_id) WHERE chapter_id IS NOT NULL;
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_book_notes_report ON book_notes(book_id) WHERE kind = 'report';
 `);
 
 // 旧版知识库留下的表（knowledge_bases、kb_documents、kb_chunks、kb_chunks_fts、

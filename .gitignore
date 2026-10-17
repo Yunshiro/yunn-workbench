@@ -15,6 +15,9 @@ build/
 *.log
 npm-debug.log*
 
+# 本地测试用的版权 epub，不入库
+server/fixtures/private-books/
+
 # 本地 SQLite 数据（~/.workbench 或项目内）
 *.db
 *.db-wal

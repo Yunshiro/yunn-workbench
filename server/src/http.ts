@@ -79,6 +79,8 @@ import {
 } from "./prompts.js";
 import { boardEvents } from "./board-events.js";
 import { mountBoardRoutes } from "./board-http.js";
+import { mountReadingRoutes } from "./reading-http.js";
+import { readingEvents } from "./reading-service.js";
 
 export const app = express();
 app.use(cors());
@@ -93,6 +95,7 @@ const wrap = (fn: (req: any, res: Response) => Promise<any> | any) => {
 };
 
 mountBoardRoutes(app, wrap);
+mountReadingRoutes(app, wrap);
 
 // ---- 健康检查 / 状态 ----
 
@@ -535,3 +538,4 @@ boardEvents.on("board_card_deleted", (d) => broadcast("board_card_deleted", d));
 boardEvents.on("board_deleted", (d) => broadcast("board_deleted", d));
 boardEvents.on("board_message", (d) => broadcast("board_message", d));
 boardEvents.on("board_message_delta", (d) => broadcast("board_message_delta", d));
+readingEvents.on("book_progress", (d) => broadcast("book_progress", d));

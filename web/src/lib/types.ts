@@ -281,6 +281,78 @@ export interface BoardMessage {
   createdAt: number;
 }
 
+export type BookType = "fiction" | "nonfiction";
+export type BookStatus = "preview" | "reading" | "error" | "done";
+export type BookSplitSource = "toc" | "spine";
+export type BookNoteStatus = "pending" | "running" | "done" | "error";
+
+export interface BookQuote {
+  text: string;
+  chapterIndex: number;
+  chapterTitle: string;
+}
+
+export interface BookChapterNote {
+  kind: BookType;
+  summary: string;
+  corePoints: string[];
+  plot: string;
+  characters: string[];
+  themes: string[];
+  quotes: BookQuote[];
+  outline: string;
+  droppedQuoteCount: number;
+}
+
+export interface BookReport {
+  kind: BookType;
+  overview: string;
+  chapterOutlines: { index: number; title: string; outline: string }[];
+  corePoints: string[];
+  characters: string[];
+  themes: string[];
+  quotes: BookQuote[];
+}
+
+export interface BookLevel {
+  depth: number;
+  chapterCount: number;
+  sampleTitle: string;
+}
+
+export interface BookSummary {
+  id: string;
+  title: string;
+  author: string;
+  bookType: BookType;
+  bookTypeSource: "auto" | "manual";
+  status: BookStatus;
+  error: string | null;
+  splitSource: BookSplitSource;
+  splitLevel: number | null;
+  levels: BookLevel[];
+  confirmed: boolean;
+  chapterCount: number;
+  doneCount: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface BookChapter {
+  id: string;
+  position: number;
+  title: string;
+  charCount: number;
+  noteStatus: BookNoteStatus;
+  noteError: string | null;
+  note: BookChapterNote | null;
+}
+
+export interface BookDetail extends BookSummary {
+  chapters: BookChapter[];
+  report: BookReport | null;
+}
+
 export interface PromptConfigResponse {
   prompts: Record<PromptKey, string>;
   defaults: Record<PromptKey, string>;
