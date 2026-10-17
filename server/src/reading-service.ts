@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import type { BookType } from "./epub.js";
-import { normalizeTitle, parseEpub, splitAtLevel } from "./epub.js";
+import { normalizeTitle, parseEpub, splitAtLevel, splitByBodyHeadings } from "./epub.js";
 import { ReadingError } from "./reading-error.js";
 import {
   clearGenerated,
@@ -19,6 +19,7 @@ import {
   saveReport,
   setChapterStatus,
   updateBookFields,
+  updateChapterSkipped,
   updateChapterTitle,
   type BookDetail,
   type BookSummary,
@@ -113,19 +114,40 @@ export function switchReadingLevel(bookId: string, depth: number): BookDetail {
   const book = requireBook(bookId);
   assertEditable(book);
   if (!Number.isInteger(depth) || depth < 0) throw new ReadingError("目录层级不正确。");
-  if (book.splitSource !== "toc") throw new ReadingError("这本书没有可用目录，已经按正文标题拆分。可以合并相邻章节。");
   const level = book.levels.find((item) => item.depth === depth);
-  if (!level) throw new ReadingError("没有这个目录层级。");
-  const documents = listDocuments(bookId).map((document) => ({
+  if (!level) throw new ReadingError("没有这个目录层级。可以改为按正文标题拆。");
+  const documents = storedDocuments(bookId);
+  const chapters = splitAtLevel(documents, getToc(bookId), depth);
+  if (chapters.length === 0) throw new ReadingError("这一层目录没有拆出可阅读的章节。");
+  replaceChapters(bookId, { source: "toc", level: depth }, chapters);
+  return getReading(bookId);
+}
+
+export function switchReadingToHeadings(bookId: string): BookDetail {
+  const book = requireBook(bookId);
+  assertEditable(book);
+  const chapters = splitByBodyHeadings(storedDocuments(bookId));
+  if (chapters.length === 0) throw new ReadingError("没有从正文标题里拆出章节。");
+  replaceChapters(bookId, { source: "spine", level: null }, chapters);
+  return getReading(bookId);
+}
+
+export function setReadingChapterSkipped(bookId: string, chapterId: string, skipped: boolean): BookDetail {
+  const book = requireBook(bookId);
+  assertEditable(book);
+  const chapter = listChaptersWithText(bookId).find((item) => item.id === chapterId);
+  if (!chapter) throw new ReadingError("没有找到这一章。", 404);
+  updateChapterSkipped(chapterId, skipped);
+  return getReading(bookId);
+}
+
+function storedDocuments(bookId: string) {
+  return listDocuments(bookId).map((document) => ({
     href: document.href,
     text: document.text,
     anchors: document.anchors,
     headings: document.headings,
   }));
-  const chapters = splitAtLevel(documents, getToc(bookId), depth);
-  if (chapters.length === 0) throw new ReadingError("这一层目录没有拆出可阅读的章节。");
-  replaceChapters(bookId, depth, chapters);
-  return getReading(bookId);
 }
 
 export function confirmReading(id: string): BookDetail {
@@ -201,7 +223,12 @@ async function runReading(bookId: string): Promise<void> {
   }
   updateBookFields(bookId, { status: "reading", error: null });
   emit(bookId);
-  const chapters = listChaptersWithText(bookId);
+  const chapters = listChaptersWithText(bookId).filter((chapter) => !chapter.skipped);
+  if (chapters.length === 0) {
+    updateBookFields(bookId, { status: "error", error: "没有可生成的章节。请先恢复被跳过的章节。" });
+    emit(bookId);
+    return;
+  }
   for (const chapter of chapters) {
     if (chapter.noteStatus === "done" && chapter.note) continue;
     try {
@@ -219,7 +246,7 @@ async function runReading(bookId: string): Promise<void> {
       return;
     }
   }
-  const finished = listChaptersWithText(bookId);
+  const finished = listChaptersWithText(bookId).filter((chapter) => !chapter.skipped);
   const latest = getBook(bookId);
   if (!latest) return;
   if (finished.some((chapter) => chapter.noteStatus !== "done" || !chapter.note)) {

@@ -7,7 +7,7 @@ import { dirname, join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import { deflateRawSync } from "node:zlib";
 import { pathToFileURL, fileURLToPath } from "node:url";
-import { MODEL_PROFILES_PATH } from "./config.js";
+import { DB_PATH, MODEL_PROFILES_PATH } from "./config.js";
 import { db } from "./db.js";
 import { cleanBookTitle, detectBookType, parseEpub, type TocNode } from "./epub.js";
 import { app } from "./http.js";
@@ -166,10 +166,16 @@ function opf(input: { title: string; author?: string; subject?: string; spine: s
 }
 
 function pack(files: Record<string, string>, extra: Record<string, string> = {}): Buffer {
+  return packBuffers({
+    ...Object.fromEntries(Object.entries({ ...files, ...extra }).map(([name, data]) => [name, Buffer.from(data)])),
+  });
+}
+
+function packBuffers(files: Record<string, Buffer>): Buffer {
   const entries = [
     { name: "mimetype", data: Buffer.from("application/epub+zip"), method: 0 },
     { name: "META-INF/container.xml", data: Buffer.from(`<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>`), method: 8 },
-    ...Object.entries({ ...files, ...extra }).map(([name, data]) => ({ name, data: Buffer.from(data), method: 8 })),
+    ...Object.entries(files).map(([name, data]) => ({ name, data, method: 8 })),
   ];
   return zip(entries);
 }
@@ -360,6 +366,36 @@ describe("reading epub", () => {
     assert.equal(parsed.chapters[0].text.includes("山路把另一句"), false);
   });
 
+  it("splits a chapter title that sits on its own line at the end of the previous paragraph", () => {
+    const parsed = parseEpub(chapterBook({
+      title: "回目粘在上一段",
+      toc: [],
+      ncx: false,
+      spine: ["body.xhtml"],
+      files: {
+        "body.xhtml": xhtml(`<p>版权留在正文里。</p>
+<p>上一回的人说到这里。要知端的，下回分解。
+第一回 甄士隐遇见贾雨村</p>
+<p>海风把这句可以核对的话留在原处，这段写得足够长，不能被切掉。后文继续沿着岸边往下写，把这一回垫到足以单独成章。</p>
+<p>这一回也到了结尾。下回分解。
+第二回</p>
+<p>冷子兴把荣国府的事说完，这段同样写得足够长，不能并进上一回。后面又补了几句，好让这一回比开头的版权说明长得多。</p>
+<p>第四回中既将薛家母子寄居的事略已表明，此回则接着写林黛玉，这段是正文不是新的一回。</p>
+<p>下回分解。
+第三回 贾雨村复职，话说雨村刚欲过渡，就遇见了故人，这段写得足够长。雨村过了河又遇见故人，这一回因此也能单独成章。</p>`),
+      },
+    }));
+    assert.equal(parsed.splitSource, "spine");
+    assert.deepEqual(parsed.chapters.map((chapter) => chapter.title), ["开头", "第一回 甄士隐遇见贾雨村", "第二回", "第三回 贾雨村复职"]);
+    assert.match(parsed.chapters[0].text, /版权留在正文里/);
+    assert.equal(parsed.chapters[0].text.includes("海风把这句"), false);
+    assert.match(parsed.chapters[1].text, /海风把这句/);
+    assert.match(parsed.chapters[2].text, /冷子兴/);
+    assert.match(parsed.chapters[2].text, /第四回中既将/);
+    assert.match(parsed.chapters[3].text, /遇见了故人/);
+    assert.ok(coverageRatio(parsed) >= 0.9);
+  });
+
   it("falls back when toc hrefs do not match the spine", () => {
     const parsed = parseEpub(chapterBook({
       title: "目录对不上",
@@ -418,6 +454,40 @@ describe("reading epub", () => {
     assert.equal(verified.quotes.length, 1);
     assert.equal(verified.dropped, 1);
     assert.equal(stripVerdicts("它讨论群体。这本书值得一读。后面还有一句。"), "它讨论群体。后面还有一句。");
+    assert.equal(locateQuote("群体一旦形成……个人的理性就会被淹没。", chapter), null);
+    assert.equal(locateQuote("个人的理性就会被淹没……群体一旦形成", chapter), null);
+    assert.equal(locateQuote("群体一旦形成...后面还有别的话。", chapter), null);
+    assert.equal(locateQuote("群体一旦形成…后面还有别的话。", chapter), null);
+    const ellipsis = verifyQuotes(["群体一旦形成……后面还有别的话。"], chapter);
+    assert.deepEqual(ellipsis.quotes, []);
+    assert.equal(ellipsis.dropped, 1);
+  });
+});
+
+describe("reading robustness", () => {
+  it("decodes a gbk chapter instead of importing mojibake", () => {
+    const parsed = parseEpub(packBuffers({
+      "OEBPS/content.opf": Buffer.from(`<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="2.0"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>编码样本</dc:title><dc:language>zh</dc:language></metadata>
+<manifest><item id="c0" href="c.xhtml" media-type="application/xhtml+xml"/><item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/></manifest>
+<spine toc="ncx"><itemref idref="c0"/></spine></package>`),
+      "OEBPS/toc.ncx": Buffer.from(`<?xml version="1.0"?><ncx xmlns="http://www.daisy.org/z3986/2005/ncx/"><navMap><navPoint id="n1"><navLabel><text>第一章</text></navLabel><content src="c.xhtml"/></navPoint></navMap></ncx>`),
+      "OEBPS/c.xhtml": Buffer.from("PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iZ2JrIj8+PGh0bWwgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGh0bWwiPjxoZWFkPjx0aXRsZT50PC90aXRsZT48L2hlYWQ+PGJvZHk+PGgyPrXa0rvVwiC6o7HfPC9oMj48cD66o7fnsNHV4r7kv8nS1LrLttS1xLuwwfTU2rC2sd+jrNXits7QtLXD1+O5u7OkoaM8L3A+PC9ib2R5PjwvaHRtbD4=", "base64"),
+    }));
+    assert.equal(parsed.chapters[0]?.title.includes("第一章"), true);
+    assert.match(parsed.chapters[0]?.text || "", /海风把这句/);
+    assert.equal((parsed.chapters[0]?.text || "").includes("\uFFFD"), false);
+  });
+
+  it("imports a book that contains one oversized image", () => {
+    const parsed = parseEpub(packBuffers({
+      "OEBPS/content.opf": Buffer.from(opf({ title: "大图样本", spine: ["ch.xhtml"] })),
+      "OEBPS/toc.ncx": Buffer.from(ncx([{ title: "第一章 正文", href: "ch.xhtml", fragment: null, children: [] }])),
+      "OEBPS/ch.xhtml": Buffer.from(xhtml("<p>第一章 正文里这句写得足够长，图片再大也不该挡住导入。</p>")),
+      "OEBPS/images/cover.jpg": Buffer.alloc(9 * 1024 * 1024, 7),
+    }));
+    assert.equal(parsed.chapters.length, 1);
+    assert.match(parsed.chapters[0].text, /图片再大/);
   });
 });
 
@@ -600,6 +670,47 @@ describe("reading flow", () => {
     assert.equal(getBookDetail(book.id), null);
   });
 
+  it("skips front matter when generating notes and the report", async () => {
+    resetModel();
+    const book = importEpubBuffer(chapterBook({
+      title: "跳过样本",
+      toc: [
+        { title: "目录", href: "toc.xhtml", fragment: null, children: [] },
+        { title: "第一章 正文", href: "ch.xhtml", fragment: null, children: [] },
+      ],
+      spine: ["toc.xhtml", "ch.xhtml"],
+      files: {
+        "toc.xhtml": xhtml("<p>目录</p><p>这里列出后面的章节，正文足够长，但默认应该跳过。</p>"),
+        "ch.xhtml": xhtml("<p>第一章 正文</p><p>正文这一句可以核对，生成时只能看到这一章。</p>"),
+      },
+    }));
+    assert.equal(book.chapters[0]?.skipped, true);
+    assert.equal(book.chapterCount, 1);
+    confirmReading(book.id);
+    await startReading(book.id);
+    const detail = getBookDetail(book.id)!;
+    assert.equal(detail.status, "done");
+    assert.equal(calls.some((prompt) => prompt.user.includes("章节标题：目录")), false);
+    assert.equal(calls.some((prompt) => prompt.user.includes("章节标题：第一章 正文")), true);
+    assert.equal(detail.report?.chapterOutlines.some((item) => item.title === "目录"), false);
+    assert.equal(detail.chapters[0]?.note, null);
+  });
+
+  it("erases deleted chapter text from the database file", () => {
+    const marker = "真空标记甲乙丙丁戊己庚辛这句只出现在将被删除的书里。";
+    const book = importEpubBuffer(chapterBook({
+      title: "待删除",
+      toc: [{ title: "第一章", href: "c.xhtml", fragment: null, children: [] }],
+      spine: ["c.xhtml"],
+      files: { "c.xhtml": xhtml(`<p>${marker}</p>`) },
+    }));
+    removeReading(book.id);
+    db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+    const files = [DB_PATH, `${DB_PATH}-wal`, `${DB_PATH}-shm`].filter((path) => existsSync(path));
+    const blob = Buffer.concat(files.map((path) => readFileSync(path)));
+    assert.equal(blob.includes(marker), false);
+  });
+
   it("turns an interrupted run back into a resumable error", () => {
     const book = importEpubBuffer(nested());
     db.prepare("UPDATE books SET confirmed = 1, status = 'reading', error = NULL WHERE id = ?").run(book.id);
@@ -694,6 +805,45 @@ const realBooksDir = [
   "/tmp/books",
 ].find((dir) => dir && existsSync(join(dir, "定位.epub")) && existsSync(join(dir, "乌合之众.epub")) && existsSync(join(dir, "遥远的救世主.epub")));
 
+const readingFixtures = join(serverRoot, "fixtures", "reading");
+
+function coverageRatio(parsed: { documents: { text: string }[]; chapters: { text: string }[] }): number {
+  const total = parsed.documents.reduce((sum, document) => sum + [...document.text].length, 0);
+  const covered = parsed.chapters.reduce((sum, chapter) => sum + [...chapter.text].length, 0);
+  return total === 0 ? 0 : covered / total;
+}
+
+describe("reading public fixtures", () => {
+  it("keeps the journey to the west when the toc only points at the license", () => {
+    const parsed = parseEpub(readFileSync(join(readingFixtures, "gut_23962.epub")));
+    const hui = parsed.chapters.filter((chapter) => /第.+回/.test(chapter.title));
+    assert.equal(parsed.splitSource, "spine");
+    assert.ok(hui.length >= 88 && hui.length <= 95, `回目数量 ${hui.length}`);
+    assert.ok(coverageRatio(parsed) >= 0.9, `覆盖率 ${coverageRatio(parsed)}`);
+  });
+
+  it("falls back when toc anchors miss or the toc is a single cover entry", () => {
+    const anchors = parseEpub(readFileSync(join(readingFixtures, "04_toc_same_file_bad_anchors.epub")));
+    const cover = parseEpub(readFileSync(join(readingFixtures, "05_toc_single_entry.epub")));
+    assert.equal(anchors.splitSource, "spine");
+    assert.equal(anchors.chapters.length, 5);
+    assert.ok(coverageRatio(anchors) >= 0.9);
+    assert.equal(cover.splitSource, "spine");
+    assert.equal(cover.chapters.length, 5);
+    assert.equal(cover.chapters.some((chapter) => chapter.title === "封面"), false);
+    assert.ok(coverageRatio(cover) >= 0.9);
+  });
+
+  it("splits a no-toc book at chapter headings and keeps sections inside them", () => {
+    const parsed = parseEpub(readFileSync(join(readingFixtures, "06_no_toc_with_sections.epub")));
+    assert.equal(parsed.splitSource, "spine");
+    assert.deepEqual(parsed.chapters.map((chapter) => chapter.title), ["第一章 标题1", "第二章 标题2", "第三章 标题3", "第四章 标题4"]);
+    assert.match(parsed.chapters[0].text, /第一节 小节1/);
+    assert.equal(parsed.chapters.some((chapter) => chapter.title.includes("第一节")), false);
+    assert.ok(coverageRatio(parsed) >= 0.9);
+  });
+});
+
 describe("reading real epubs", { skip: realBooksDir ? false : "本地没有三本测试 epub，跳过" }, () => {
   it("splits the three source books from their own toc", () => {
     const positioning = parseEpub(readFileSync(join(realBooksDir!, "定位.epub")));
@@ -724,8 +874,7 @@ describe("reading real epubs", { skip: realBooksDir ? false : "本地没有三�
     assert.equal(crowd.chapters.length, 17);
     assert.equal(novel.selectedLevel, 0);
     assert.equal(novel.chapters.length, 48);
-    assert.equal(novel.chapters[0]?.title, "目录");
-    assert.equal(novel.chapters.at(-1)?.title, "版权页");
-    assert.equal(novel.chapters.filter((chapter) => /^第.+章$/.test(chapter.title)).length, 46);
+    assert.deepEqual(novel.chapters.filter((chapter) => chapter.skipped).map((chapter) => chapter.title), ["目录", "版权页"]);
+    assert.equal(novel.chapters.filter((chapter) => !chapter.skipped && /^第.+章$/.test(chapter.title)).length, 46);
   });
 });

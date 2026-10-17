@@ -20,6 +20,8 @@ export interface TextAnchor {
 export interface TextHeading {
   offset: number;
   text: string;
+  /** 1–3 来自 h1–h3，9 表示普通段落里识别出的标题。 */
+  level: number;
 }
 
 export interface ParsedDocument {
@@ -41,6 +43,7 @@ export interface ParsedChapter {
   endDoc: number;
   endOffset: number;
   text: string;
+  skipped: boolean;
 }
 
 export interface SplitLevel {
@@ -145,9 +148,14 @@ export function parseEpub(data: Buffer): ParsedEpub {
 export function splitAtLevel(documents: ParsedDocument[], toc: TocNode[], depth: number): ParsedChapter[] {
   const level = buildLevel(documents, toc, depth);
   if (!level || level.resolved / Math.max(level.cuts, 1) < 0.5 || level.chapters.length === 0) {
-    throw new ReadingError("这一层目录对不上正文，换一层或继续使用当前拆分。");
+    throw new ReadingError("这一层目录对不上正文，换一层或改为按正文标题拆。");
   }
   return level.chapters;
+}
+
+/** 按正文里的章节标题拆。有多层标题时只切最上面一层，例如章，而不是章下面的节。 */
+export function splitByBodyHeadings(documents: ParsedDocument[]): ParsedChapter[] {
+  return chaptersFromSpine(documents);
 }
 
 export function planSplits(documents: ParsedDocument[], toc: TocNode[]): {
@@ -180,16 +188,24 @@ export function planSplits(documents: ParsedDocument[], toc: TocNode[]): {
       bestScore = score;
     }
   }
+  const totalChars = documents.reduce((sum, document) => sum + [...document.text].length, 0);
+  const useSpine = isPoorSplit(best.chapters, spineChapters, totalChars);
   return {
-    source: "toc",
+    source: useSpine ? "spine" : "toc",
     levels: built.map((level) => ({
       depth: level.depth,
       chapterCount: level.chapters.length,
       sampleTitle: sampleTitle(level.chapters),
     })),
-    selectedLevel: best.depth,
-    chapters: best.chapters,
+    selectedLevel: useSpine ? null : best.depth,
+    chapters: useSpine ? spineChapters : best.chapters,
   };
+}
+
+function isPoorSplit(chapters: ParsedChapter[], spineChapters: ParsedChapter[], totalChars: number): boolean {
+  const covered = chapters.reduce((sum, chapter) => sum + [...chapter.text].length, 0);
+  if (totalChars > 0 && covered / totalChars < 0.9) return true;
+  return spineChapters.length >= 4 && chapters.length * 2 < spineChapters.length;
 }
 
 export function cleanBookTitle(raw: string): string {
@@ -346,6 +362,19 @@ function chaptersFromCuts(documents: ParsedDocument[], cuts: Cut[]): ParsedChapt
     if (previous && comparePosition(cut.spanStart, previous.spanStart) < 0) continue;
     points.push(cut);
   }
+  const origin = { doc: 0, offset: 0 };
+  if (points.length > 0 && comparePosition(points[0].spanStart, origin) > 0) {
+    const lead = normalizeChapterText(sliceDocuments(documents, origin, points[0].spanStart));
+    const leadLength = [...lead].length;
+    const totalLength = documents.reduce((sum, document) => sum + [...document.text].length, 0);
+    if (leadLength >= MIN_CHAPTER_CHARS && totalLength > 0 && leadLength / totalLength >= 0.1) {
+      let title = leadingTitle(documents, points[0].spanStart);
+      if (title === points[0].title) title = "开头";
+      points.unshift({ title, pos: origin, spanStart: origin });
+    } else if (leadLength > 0) {
+      points[0].spanStart = origin;
+    }
+  }
   const endOfBook = documents.length
     ? { doc: documents.length - 1, offset: documents[documents.length - 1].text.length }
     : { doc: 0, offset: 0 };
@@ -363,24 +392,53 @@ function chaptersFromCuts(documents: ParsedDocument[], cuts: Cut[]): ParsedChapt
       endDoc: end.doc,
       endOffset: end.offset,
       text,
+      skipped: false,
     });
   }
-  return chapters;
+  return finishChapters(chapters);
+}
+
+function leadingTitle(documents: ParsedDocument[], end: TextPosition): string {
+  for (let doc = 0; doc < documents.length && doc <= end.doc; doc++) {
+    for (const heading of documents[doc].headings) {
+      if (comparePosition({ doc, offset: heading.offset }, end) >= 0) break;
+      const title = normalizeTitle(heading.text);
+      if (title && [...title].length <= 40 && !isFrontMatterTitle(title)) return title;
+    }
+  }
+  return "开头";
+}
+
+function finishChapters(chapters: ParsedChapter[]): ParsedChapter[] {
+  return chapters.map((chapter) => ({ ...chapter, skipped: isFrontMatterTitle(chapter.title) }));
+}
+
+export function isFrontMatterTitle(title: string): boolean {
+  const text = title.replace(/\s+/g, "");
+  if (!text || [...text].length > 16) return false;
+  return /^(目录|目次|封面|书名页|扉页|版权页?|版权信息|copyright|cover)$/i.test(text);
 }
 
 function chaptersFromSpine(documents: ParsedDocument[]): ParsedChapter[] {
-  const points: Cut[] = [];
+  const candidates: Array<{ rank: number; cut: Cut }> = [];
   documents.forEach((document, doc) => {
     for (const heading of document.headings) {
-      if (!isChapterHeading(heading.text)) continue;
-      points.push({
-        title: normalizeTitle(heading.text),
-        pos: { doc, offset: heading.offset },
-        spanStart: { doc, offset: heading.offset },
+      const rank = splitRank(heading);
+      if (rank >= 99) continue;
+      candidates.push({
+        rank,
+        cut: {
+          title: normalizeTitle(heading.text),
+          pos: { doc, offset: heading.offset },
+          spanStart: { doc, offset: heading.offset },
+        },
       });
     }
   });
-  if (points.length >= 2) {
+  const ranks = [...new Set(candidates.map((item) => item.rank))].sort((left, right) => left - right);
+  for (const rank of ranks) {
+    const points = candidates.filter((item) => item.rank === rank).map((item) => item.cut);
+    if (points.length < 2) continue;
     const chapters = chaptersFromCuts(documents, points);
     if (chapters.length >= 2) return chapters;
   }
@@ -398,19 +456,37 @@ function chaptersFromSpine(documents: ParsedDocument[]): ParsedChapter[] {
       endDoc: doc,
       endOffset: document.text.length,
       text,
+      skipped: false,
     });
   });
-  if (chapters.length > 0) return chapters;
+  if (chapters.length > 0) return finishChapters(chapters);
   const combined = normalizeChapterText(documents.map((document) => document.text).join("\n"));
   if ([...combined].length < MIN_CHAPTER_CHARS) return [];
-  return [{
+  return finishChapters([{
     title: "正文",
     startDoc: 0,
     startOffset: 0,
     endDoc: documents.length - 1,
     endOffset: documents[documents.length - 1]?.text.length ?? 0,
     text: combined,
-  }];
+    skipped: false,
+  }]);
+}
+
+function splitRank(heading: TextHeading): number {
+  const semantic = semanticRank(heading.text);
+  if (semantic >= 0) return semantic;
+  const level = heading.level || 9;
+  if (level >= 1 && level <= 3) return 10 + level;
+  return 99;
+}
+
+function semanticRank(title: string): number {
+  const text = title.trim();
+  if (/第\s*[0-9０-９一二三四五六七八九十百千零〇两]+\s*[篇部卷]/u.test(text)) return 0;
+  if (/第\s*[0-9０-９一二三四五六七八九十百千零〇两]+\s*[章回]/u.test(text) || /^chapter\s+\d+/i.test(text)) return 1;
+  if (/第\s*[0-9０-９一二三四五六七八九十百千零〇两]+\s*[节讲课]/u.test(text) || /^section\s+\d+/i.test(text)) return 2;
+  return -1;
 }
 
 function isChapterHeading(title: string): boolean {
@@ -418,6 +494,21 @@ function isChapterHeading(title: string): boolean {
   if (text.length < 2 || text.length > 80) return false;
   if (/[。！？]/u.test(text)) return false;
   return /^第\s*[0-9０-９一二三四五六七八九十百千零〇两]+\s*[章节回部篇卷]/u.test(text) || /^chapter\s+\d+\b/i.test(text);
+}
+
+/** 一行以「第X章/回」开头，后面如果是正文，标题只取到句读之前。 */
+function standaloneChapterTitle(line: string): string | null {
+  const text = line.trim();
+  if ([...text].length < 2 || [...text].length > 200) return null;
+  const match = /^(第\s*[0-9０-９一二三四五六七八九十百千零〇两]+\s*[章节回部篇卷]|chapter\s+\d+)/iu.exec(text);
+  if (!match) return null;
+  const rest = text.slice(match[0].length);
+  if (rest && !/^\s/u.test(rest)) return null;
+  if (isChapterHeading(text) && !/[。！？，；：、．]/u.test(text)) return text;
+  const subtitle = rest.trim();
+  const cut = subtitle.search(/[。！？，；：、．]/u);
+  const head = [...(cut >= 0 ? subtitle.slice(0, cut) : subtitle).trim()].slice(0, 40).join("").trim();
+  return head ? `${match[0]} ${head}` : match[0];
 }
 
 function comparePosition(left: TextPosition, right: TextPosition): number {
@@ -607,12 +698,35 @@ function assertReadable(files: Map<string, Buffer>): void {
 
 function readText(files: Map<string, Buffer>, name: string): string | undefined {
   const exact = files.get(name);
-  if (exact) return exact.toString("utf8").replace(/^\uFEFF/, "");
+  if (exact) return decodeBookText(exact);
   const lower = name.toLowerCase();
   for (const [key, value] of files) {
-    if (key.toLowerCase() === lower) return value.toString("utf8").replace(/^\uFEFF/, "");
+    if (key.toLowerCase() === lower) return decodeBookText(value);
   }
   return undefined;
+}
+
+function decodeBookText(content: Buffer): string {
+  const head = content.subarray(0, 500).toString("latin1");
+  const declared = /encoding\s*=\s*["']([A-Za-z0-9._-]+)["']/i.exec(head)?.[1]
+    || /charset\s*=\s*["']([^"']+)["']/i.exec(head)?.[1];
+  const encoding = normalizeEncoding(declared);
+  if (!encoding || encoding === "utf-8" || encoding === "utf8" || encoding === "ascii" || encoding === "us-ascii") {
+    return content.toString("utf8").replace(/^\uFEFF/, "");
+  }
+  try {
+    return new TextDecoder(encoding).decode(content).replace(/^\uFEFF/, "");
+  } catch {
+    throw new ReadingError(`这本 epub 使用了无法识别的文字编码（${declared}）。`);
+  }
+}
+
+function normalizeEncoding(declared: string | undefined): string | null {
+  if (!declared) return null;
+  const encoding = declared.toLowerCase().replace(/_/g, "-");
+  if (encoding === "gb2312" || encoding === "gb-2312" || encoding === "x-gbk") return "gbk";
+  if (encoding === "gb18030" || encoding === "gbk" || encoding === "big5" || encoding === "shift-jis" || encoding === "euc-jp") return encoding;
+  return encoding;
 }
 
 function resolveHref(baseDir: string, href: string): { path: string; fragment: string | null } {
@@ -652,13 +766,22 @@ export function extractHtml(html: string): { text: string; anchors: TextAnchor[]
       const raw = source.slice(index, next === -1 ? source.length : next);
       index = next === -1 ? source.length : next;
       if (skipping) continue;
-      const decoded = decodeEntities(raw).replace(/\u00a0/g, " ").replace(/\u3000/g, " ").replace(/[ \t\r\f]+/g, " ").replace(/\n+/g, " ");
-      if (!decoded) continue;
-      if (!decoded.trim()) {
+      const prepared = decodeEntities(raw).replace(/\u00a0/g, " ").replace(/\u3000/g, " ").replace(/[ \t\r\f]+/g, " ");
+      if (!prepared) continue;
+      if (!prepared.trim()) {
         if (text && !text.endsWith("\n") && !text.endsWith(" ")) text += " ";
         continue;
       }
-      text += text.endsWith("\n") ? decoded.trimStart() : decoded;
+      const flat = prepared.replace(/\n+/g, " ");
+      const trimmedPrefix = text.endsWith("\n") ? flat.length - flat.trimStart().length : 0;
+      const appended = trimmedPrefix > 0 ? flat.slice(trimmedPrefix) : flat;
+      const base = text.length;
+      text += appended;
+      for (const heading of embeddedChapterHeadings(prepared)) {
+        const relative = mapPreparedIndex(prepared, heading.index) - trimmedPrefix;
+        if (relative < 0 || relative > appended.length) continue;
+        headings.push({ offset: base + relative, text: normalizeTitle(heading.text).slice(0, 80), level: 9 });
+      }
       continue;
     }
     if (source.startsWith("<!--", index)) {
@@ -693,7 +816,7 @@ export function extractHtml(html: string): { text: string; anchors: TextAnchor[]
         blocks.length = block;
         const captured = text.slice(start).trim();
         if (captured && (HEADING_TAGS.has(name) || isChapterHeading(captured))) {
-          headings.push({ offset: start, text: normalizeTitle(captured).slice(0, 80) });
+          headings.push({ offset: start, text: normalizeTitle(captured).slice(0, 80), level: headingLevel(name) });
         }
         break;
       }
@@ -726,16 +849,56 @@ export function extractHtml(html: string): { text: string; anchors: TextAnchor[]
   };
 }
 
+function headingLevel(tag: string): number {
+  if (tag === "h1") return 1;
+  if (tag === "h2") return 2;
+  if (tag === "h3") return 3;
+  return 9;
+}
+
 function dedupeHeadings(headings: TextHeading[]): TextHeading[] {
   const seen = new Set<string>();
   const result: TextHeading[] = [];
   for (const heading of headings) {
     const key = `${heading.offset}:${heading.text}`;
     if (seen.has(key)) continue;
+    const previous = result[result.length - 1];
+    if (previous && previous.text === heading.text && heading.offset >= previous.offset && heading.offset - previous.offset <= 240) continue;
     seen.add(key);
     result.push(heading);
   }
   return result;
+}
+
+function embeddedChapterHeadings(prepared: string): Array<{ index: number; text: string }> {
+  const found: Array<{ index: number; text: string }> = [];
+  let start = 0;
+  while (start <= prepared.length) {
+    const end = prepared.indexOf("\n", start);
+    const lineEnd = end < 0 ? prepared.length : end;
+    const rawLine = prepared.slice(start, lineEnd);
+    const lead = rawLine.length - rawLine.trimStart().length;
+    const title = standaloneChapterTitle(rawLine);
+    if (title) found.push({ index: start + lead, text: title });
+    if (end < 0) break;
+    start = end + 1;
+  }
+  return found;
+}
+
+function mapPreparedIndex(prepared: string, index: number): number {
+  let flat = 0;
+  let cursor = 0;
+  while (cursor < index) {
+    if (prepared[cursor] === "\n") {
+      while (cursor < index && prepared[cursor] === "\n") cursor += 1;
+      flat += 1;
+      continue;
+    }
+    flat += 1;
+    cursor += 1;
+  }
+  return flat;
 }
 
 function findTagEnd(source: string, start: number): number {
@@ -886,6 +1049,7 @@ function unzipEpub(data: Buffer): Map<string, Buffer> {
     const name = data.subarray(offset + 46, offset + 46 + nameLength).toString("utf8").replace(/\\/g, "/").replace(/^\/+/, "");
     offset += 46 + nameLength + extraLength + commentLength;
     if (!name || name.endsWith("/")) continue;
+    if (isIgnoredAsset(name)) continue;
     if (name.split("/").includes("..") || compressedSize === 0xffffffff || localOffset === 0xffffffff) throw corrupt();
     entries.push({ name, method, compressedSize, localOffset });
   }
@@ -915,6 +1079,10 @@ function unzipEpub(data: Buffer): Map<string, Buffer> {
   }
   if (!readText(files, "META-INF/container.xml")) throw corrupt();
   return files;
+}
+
+function isIgnoredAsset(name: string): boolean {
+  return /\.(jpe?g|png|gif|webp|bmp|svg|tiff?|ttf|otf|woff2?|mp3|mp4|m4a|pdf)$/i.test(name);
 }
 
 function findEocd(data: Buffer): number {

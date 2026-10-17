@@ -24,6 +24,10 @@ function formatChars(count: number): string {
   return `${count} 字`;
 }
 
+function skippedCount(book: { chapters: { skipped: boolean }[] }): number {
+  return book.chapters.filter((chapter) => chapter.skipped).length;
+}
+
 function progressRatio(book: BookSummary): number {
   const total = book.chapterCount + 1;
   if (total <= 0) return 0;
@@ -37,7 +41,7 @@ export default function BooksView() {
   const [detail, setDetail] = useState<BookDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [mergedSinceLevel, setMergedSinceLevel] = useState(false);
+  const [chapterEdits, setChapterEdits] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
   const [authorDraft, setAuthorDraft] = useState("");
   const [chapterDrafts, setChapterDrafts] = useState<Record<string, string>>({});
@@ -126,8 +130,13 @@ export default function BooksView() {
     }
   });
 
+  function confirmChapterReset(): boolean {
+    if (!chapterEdits) return true;
+    return window.confirm("切换拆分会重新划分章节，刚才的合并和改名会被清掉。要继续吗？");
+  }
+
   function selectBook(id: string) {
-    setMergedSinceLevel(false);
+    setChapterEdits(false);
     setSelectedId(id);
     setError(null);
   }
@@ -151,7 +160,7 @@ export default function BooksView() {
     setError(null);
     try {
       const book = await api.importBook(file);
-      setMergedSinceLevel(false);
+      setChapterEdits(false);
       applyDetail(book);
       setSelectedId(book.id);
     } catch (err) {
@@ -341,7 +350,7 @@ export default function BooksView() {
               </div>
               <span>
                 {detail.status === "preview"
-                  ? `${detail.chapterCount} 章待确认`
+                  ? `${detail.chapterCount} 章待确认${skippedCount(detail) ? `，跳过 ${skippedCount(detail)} 章` : ""}`
                   : detail.status === "done"
                     ? `已完成 ${detail.chapterCount} 章和全书报告`
                     : `已完成 ${detail.doneCount}/${detail.chapterCount} 章`}
@@ -352,35 +361,53 @@ export default function BooksView() {
 
             {!detail.confirmed && (
               <div className="book-preview">
-                {detail.splitSource === "spine" ? (
-                  <p className="book-hint">没有可用目录，已按正文标题拆分。可以合并相邻章节。</p>
-                ) : (
-                  <>
-                    <div className="book-levels" role="group" aria-label="目录层级">
-                      {detail.levels.map((level) => (
-                        <button
-                          key={level.depth}
-                          type="button"
-                          className={`book-level${detail.splitLevel === level.depth ? " book-level--active" : ""}`}
-                          disabled={busy || detail.splitLevel === level.depth}
-                          onClick={() => void run(
-                            () => api.setBookLevel(detail.id, level.depth),
-                            () => setMergedSinceLevel(false),
-                          )}
-                        >
-                          <span>第 {level.depth + 1} 层 · {level.chapterCount} 章</span>
-                          {level.sampleTitle && <span className="book-level__sample">{level.sampleTitle}</span>}
-                        </button>
-                      ))}
-                    </div>
-                    {mergedSinceLevel && (
-                      <p className="book-hint">切换层级会按目录重新拆分，并清掉刚才的合并。</p>
-                    )}
-                  </>
+                <div className="book-levels" role="group" aria-label="拆分方式">
+                  {detail.levels.map((level) => (
+                    <button
+                      key={level.depth}
+                      type="button"
+                      className={`book-level${detail.splitSource === "toc" && detail.splitLevel === level.depth ? " book-level--active" : ""}`}
+                      disabled={busy || (detail.splitSource === "toc" && detail.splitLevel === level.depth)}
+                      onClick={() => {
+                        if (!confirmChapterReset()) return;
+                        void run(
+                          () => api.setBookLevel(detail.id, level.depth),
+                          () => setChapterEdits(false),
+                        );
+                      }}
+                    >
+                      <span>第 {level.depth + 1} 层 · {level.chapterCount} 章</span>
+                      {level.sampleTitle && <span className="book-level__sample">{level.sampleTitle}</span>}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    className={`book-level${detail.splitSource === "spine" ? " book-level--active" : ""}`}
+                    disabled={busy || detail.splitSource === "spine"}
+                    onClick={() => {
+                      if (!confirmChapterReset()) return;
+                      void run(
+                        () => api.useBookHeadings(detail.id),
+                        () => setChapterEdits(false),
+                      );
+                    }}
+                  >
+                    <span>按正文标题拆</span>
+                    <span className="book-level__sample">用最上一层标题，例如章而不是节</span>
+                  </button>
+                </div>
+                {detail.splitSource === "spine" && detail.levels.length === 0 && (
+                  <p className="book-hint">没有可用目录，已按正文标题拆分。可以合并相邻章节，或跳过目录和版权页。</p>
+                )}
+                {detail.splitSource === "spine" && detail.levels.length > 0 && (
+                  <p className="book-hint">目录和正文对不上，已按正文标题拆分。也可以改用上面的某一层目录。</p>
+                )}
+                {chapterEdits && (
+                  <p className="book-hint">切换拆分会重新划分章节，刚才的合并和改名会被清掉。</p>
                 )}
                 <ol className="book-chapters">
                   {detail.chapters.map((chapter, index) => (
-                    <li key={chapter.id} className="book-chapter">
+                    <li key={chapter.id} className={`book-chapter${chapter.skipped ? " book-chapter--skipped" : ""}`}>
                       <span className="book-chapter__index">{index + 1}</span>
                       <input
                         className="input"
@@ -393,10 +420,18 @@ export default function BooksView() {
                             setChapterDrafts((current) => ({ ...current, [chapter.id]: chapter.title }));
                             return;
                           }
-                          void run(() => api.renameBookChapter(detail.id, chapter.id, title));
+                          void run(() => api.renameBookChapter(detail.id, chapter.id, title), () => setChapterEdits(true));
                         }}
                       />
-                      <span className="book-chapter__chars">{formatChars(chapter.charCount)}</span>
+                      <span className="book-chapter__chars">{chapter.skipped ? "已跳过" : formatChars(chapter.charCount)}</span>
+                      <button
+                        className="btn btn--ghost btn--sm"
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void run(() => api.setBookChapterSkipped(detail.id, chapter.id, !chapter.skipped))}
+                      >
+                        {chapter.skipped ? "恢复这章" : "跳过这章"}
+                      </button>
                       {index < detail.chapters.length - 1 && (
                         <button
                           className="btn btn--ghost btn--sm"
@@ -404,7 +439,7 @@ export default function BooksView() {
                           disabled={busy}
                           onClick={() => void run(
                             () => api.mergeBookChapter(detail.id, chapter.id),
-                            () => setMergedSinceLevel(true),
+                            () => setChapterEdits(true),
                           )}
                         >
                           与下一章合并
@@ -463,12 +498,13 @@ function ChapterNoteView({ chapter }: { chapter: BookChapter }) {
       <header className="book-note__head">
         <h3>{chapter.title}</h3>
         <span>{formatChars(chapter.charCount)}</span>
-        {chapter.noteStatus === "running" && <Tag color="blue">生成中</Tag>}
-        {chapter.noteStatus === "pending" && <Tag>待生成</Tag>}
-        {chapter.noteStatus === "error" && <Tag color="red">失败</Tag>}
+        {chapter.skipped && <Tag>已跳过</Tag>}
+        {!chapter.skipped && chapter.noteStatus === "running" && <Tag color="blue">生成中</Tag>}
+        {!chapter.skipped && chapter.noteStatus === "pending" && <Tag>待生成</Tag>}
+        {!chapter.skipped && chapter.noteStatus === "error" && <Tag color="red">失败</Tag>}
       </header>
       {chapter.noteError && <p className="book-note__error">{chapter.noteError}</p>}
-      {chapter.note && <NoteBody note={chapter.note} />}
+      {!chapter.skipped && chapter.note && <NoteBody note={chapter.note} />}
     </li>
   );
 }

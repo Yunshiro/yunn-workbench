@@ -38,6 +38,7 @@ export interface BookChapterView {
   charCount: number;
   noteStatus: NoteStatus;
   noteError: string | null;
+  skipped: boolean;
   note: ChapterNote | null;
 }
 
@@ -51,7 +52,7 @@ export interface StoredDocument {
   href: string;
   text: string;
   anchors: { id: string; offset: number }[];
-  headings: { offset: number; text: string }[];
+  headings: { offset: number; text: string; level: number }[];
 }
 
 export interface StoredChapter extends BookChapterView {
@@ -78,8 +79,8 @@ interface NewBook {
 export function listBooks(): BookSummary[] {
   const rows = db.prepare(`
     SELECT b.*,
-      (SELECT COUNT(*) FROM book_chapters c WHERE c.book_id = b.id) AS chapter_count,
-      (SELECT COUNT(*) FROM book_chapters c WHERE c.book_id = b.id AND c.note_status = 'done') AS done_count
+      (SELECT COUNT(*) FROM book_chapters c WHERE c.book_id = b.id AND c.skipped = 0) AS chapter_count,
+      (SELECT COUNT(*) FROM book_chapters c WHERE c.book_id = b.id AND c.skipped = 0 AND c.note_status = 'done') AS done_count
     FROM books b
     ORDER BY b.updated_at DESC
   `).all() as any[];
@@ -89,8 +90,8 @@ export function listBooks(): BookSummary[] {
 export function getBook(id: string): BookSummary | null {
   const row = db.prepare(`
     SELECT b.*,
-      (SELECT COUNT(*) FROM book_chapters c WHERE c.book_id = b.id) AS chapter_count,
-      (SELECT COUNT(*) FROM book_chapters c WHERE c.book_id = b.id AND c.note_status = 'done') AS done_count
+      (SELECT COUNT(*) FROM book_chapters c WHERE c.book_id = b.id AND c.skipped = 0) AS chapter_count,
+      (SELECT COUNT(*) FROM book_chapters c WHERE c.book_id = b.id AND c.skipped = 0 AND c.note_status = 'done') AS done_count
     FROM books b WHERE b.id = ?
   `).get(id) as any;
   return row ? rowToSummary(row) : null;
@@ -104,7 +105,7 @@ export function getBookDetail(id: string): BookDetail | null {
 
 export function listChapterViews(bookId: string): BookChapterView[] {
   const rows = db.prepare(`
-    SELECT c.id, c.position, c.title, c.char_count, c.note_status, c.note_error, n.content_json AS note_json
+    SELECT c.id, c.position, c.title, c.char_count, c.note_status, c.note_error, c.skipped, n.content_json AS note_json
     FROM book_chapters c
     LEFT JOIN book_notes n ON n.chapter_id = c.id AND n.kind = 'chapter'
     WHERE c.book_id = ?
@@ -138,7 +139,11 @@ export function listDocuments(bookId: string): StoredDocument[] {
     href: String(row.href),
     text: String(row.text || ""),
     anchors: parseJson(row.anchors_json, []),
-    headings: parseJson(row.headings_json, []),
+    headings: parseJson<Array<{ offset: number; text: string; level?: number }>>(row.headings_json, []).map((heading) => ({
+      offset: Number(heading.offset) || 0,
+      text: String(heading.text || ""),
+      level: Number(heading.level) || 9,
+    })),
   }));
 }
 
@@ -180,12 +185,12 @@ export function insertBook(input: NewBook): BookDetail {
   return getBookDetail(id)!;
 }
 
-export function replaceChapters(bookId: string, splitLevel: number, chapters: ParsedChapter[]): void {
+export function replaceChapters(bookId: string, split: { source: SplitSource; level: number | null }, chapters: ParsedChapter[]): void {
   const now = Date.now();
   transaction(() => {
     db.prepare("DELETE FROM book_chapters WHERE book_id = ?").run(bookId);
     insertChapters(bookId, chapters, now);
-    db.prepare("UPDATE books SET split_level = ?, updated_at = ? WHERE id = ?").run(splitLevel, now, bookId);
+    db.prepare("UPDATE books SET split_source = ?, split_level = ?, updated_at = ? WHERE id = ?").run(split.source, split.level, now, bookId);
   });
 }
 
@@ -219,6 +224,10 @@ export function updateBookFields(id: string, fields: {
 
 export function updateChapterTitle(id: string, title: string): void {
   db.prepare("UPDATE book_chapters SET title = ?, updated_at = ? WHERE id = ?").run(title, Date.now(), id);
+}
+
+export function updateChapterSkipped(id: string, skipped: boolean): void {
+  db.prepare("UPDATE book_chapters SET skipped = ?, updated_at = ? WHERE id = ?").run(skipped ? 1 : 0, Date.now(), id);
 }
 
 export function setChapterStatus(id: string, status: NoteStatus, error: string | null): void {
@@ -281,7 +290,9 @@ export function mergeStoredChapters(bookId: string, chapterId: string, documents
 
 export function deleteBook(id: string): boolean {
   const result = db.prepare("DELETE FROM books WHERE id = ?").run(id);
-  return Number(result.changes) > 0;
+  const deleted = Number(result.changes) > 0;
+  if (deleted) db.exec("VACUUM");
+  return deleted;
 }
 
 export function recoverInterruptedBooks(): number {
@@ -317,8 +328,8 @@ function insertChapters(bookId: string, chapters: ParsedChapter[], now: number):
   const statement = db.prepare(`
     INSERT INTO book_chapters (
       id, book_id, position, title, start_doc, start_offset, end_doc, end_offset,
-      text, char_count, note_status, note_error, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL, ?, ?)
+      text, char_count, note_status, note_error, skipped, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL, ?, ?, ?)
   `);
   chapters.forEach((chapter, position) => {
     statement.run(
@@ -332,6 +343,7 @@ function insertChapters(bookId: string, chapters: ParsedChapter[], now: number):
       chapter.endOffset,
       chapter.text,
       [...chapter.text].length,
+      chapter.skipped ? 1 : 0,
       now,
       now,
     );
@@ -393,6 +405,7 @@ function rowToChapter(row: any): BookChapterView {
     charCount: Number(row.char_count || 0),
     noteStatus: row.note_status,
     noteError: row.note_error ?? null,
+    skipped: Number(row.skipped) === 1,
     note: row.note_json ? parseJson(row.note_json, null) : null,
   };
 }

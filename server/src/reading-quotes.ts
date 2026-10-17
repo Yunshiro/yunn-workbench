@@ -47,18 +47,11 @@ function sliceOriginal(chapterText: string, map: CompactText, start: number, len
 
 /**
  * 原句必须能在章节原文里找到。核对成功时返回原文中的那一段，而不是模型改写后的文本。
- * 带省略号的候选句拆开后按顺序核对，对不上就丢掉。
+ * 带省略号的句子无法确定中间缺了什么，一律不保留。
  */
 export function locateQuote(quote: string, chapterText: string): string | null {
   const trimmed = quote.trim();
-  if (!trimmed) return null;
-  const parts = trimmed.split(/…{1,2}|\.{3,}|。{3,}/u).map((part) => part.trim()).filter(Boolean);
-  if (parts.length > 1) {
-    const found = parts.map((part) => locateExact(part, chapterText));
-    if (found.some((part) => !part)) return null;
-    if (found.every((part) => part && compactText(part).compact.length >= 6)) return found.join("……");
-    return null;
-  }
+  if (!trimmed || /…|\.{3,}|。{3,}/u.test(trimmed)) return null;
   return locateExact(trimmed, chapterText);
 }
 

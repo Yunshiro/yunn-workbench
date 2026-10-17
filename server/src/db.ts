@@ -236,6 +236,7 @@ db.exec(`
     char_count    INTEGER NOT NULL,
     note_status   TEXT NOT NULL DEFAULT 'pending',
     note_error    TEXT,
+    skipped       INTEGER NOT NULL DEFAULT 0,
     created_at    INTEGER NOT NULL,
     updated_at    INTEGER NOT NULL,
     UNIQUE (book_id, position)
@@ -260,6 +261,11 @@ db.exec(`
 
 // 旧版知识库留下的表（knowledge_bases、kb_documents、kb_chunks、kb_chunks_fts、
 // kb_sessions、kb_messages）如果已经存在，启动时保持原样，不删除、不改写、也不再读写。
+
+const chapterColumns = db.prepare("PRAGMA table_info(book_chapters)").all() as Array<{ name: string }>;
+if (chapterColumns.length > 0 && !chapterColumns.some((column) => column.name === "skipped")) {
+  db.exec("ALTER TABLE book_chapters ADD COLUMN skipped INTEGER NOT NULL DEFAULT 0");
+}
 
 // Lightweight forward migration for databases created before research traces existed.
 const taskColumns = db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>;

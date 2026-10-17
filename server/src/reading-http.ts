@@ -11,7 +11,9 @@ import {
   removeReading,
   renameReadingChapter,
   reopenReading,
+  setReadingChapterSkipped,
   switchReadingLevel,
+  switchReadingToHeadings,
   updateReading,
 } from "./reading-service.js";
 
@@ -63,7 +65,19 @@ export function mountReadingRoutes(app: Express, wrap: Wrap): void {
 
   app.post("/api/books/:id/level", wrap(async (req, res) => {
     try {
+      if (req.body?.source === "spine") {
+        res.json(switchReadingToHeadings(req.params.id));
+        return;
+      }
       res.json(switchReadingLevel(req.params.id, Number(req.body?.level)));
+    } catch (error) {
+      fail(res, error);
+    }
+  }));
+
+  app.post("/api/books/:id/chapters/:chapterId/skip", wrap(async (req, res) => {
+    try {
+      res.json(setReadingChapterSkipped(req.params.id, req.params.chapterId, req.body?.skipped !== false));
     } catch (error) {
       fail(res, error);
     }

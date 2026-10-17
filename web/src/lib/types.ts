@@ -345,6 +345,7 @@ export interface BookChapter {
   charCount: number;
   noteStatus: BookNoteStatus;
   noteError: string | null;
+  skipped: boolean;
   note: BookChapterNote | null;
 }
 

@@ -3721,9 +3721,13 @@ body.modal-open .content {
 
 .book-chapter {
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) auto auto;
+  grid-template-columns: 28px minmax(0, 1fr) auto auto auto;
   align-items: center;
   gap: 8px;
+}
+
+.book-chapter--skipped {
+  opacity: 0.55;
 }
 
 .book-chapter__index {
