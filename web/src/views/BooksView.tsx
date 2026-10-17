@@ -42,6 +42,7 @@ export default function BooksView() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [chapterEdits, setChapterEdits] = useState(false);
+  const [pendingSplit, setPendingSplit] = useState<{ kind: "level"; depth: number } | { kind: "spine" } | null>(null);
   const [titleDraft, setTitleDraft] = useState("");
   const [authorDraft, setAuthorDraft] = useState("");
   const [chapterDrafts, setChapterDrafts] = useState<Record<string, string>>({});
@@ -130,13 +131,27 @@ export default function BooksView() {
     }
   });
 
-  function confirmChapterReset(): boolean {
-    if (!chapterEdits) return true;
-    return window.confirm("切换拆分会重新划分章节，刚才的合并和改名会被清掉。要继续吗？");
+  function requestSplit(next: { kind: "level"; depth: number } | { kind: "spine" }) {
+    if (!detail) return;
+    if (chapterEdits) {
+      setPendingSplit(next);
+      return;
+    }
+    applySplit(next);
+  }
+
+  function applySplit(next: { kind: "level"; depth: number } | { kind: "spine" }) {
+    if (!detail) return;
+    setPendingSplit(null);
+    void run(
+      () => next.kind === "spine" ? api.useBookHeadings(detail.id) : api.setBookLevel(detail.id, next.depth),
+      () => setChapterEdits(false),
+    );
   }
 
   function selectBook(id: string) {
     setChapterEdits(false);
+    setPendingSplit(null);
     setSelectedId(id);
     setError(null);
   }
@@ -368,13 +383,7 @@ export default function BooksView() {
                       type="button"
                       className={`book-level${detail.splitSource === "toc" && detail.splitLevel === level.depth ? " book-level--active" : ""}`}
                       disabled={busy || (detail.splitSource === "toc" && detail.splitLevel === level.depth)}
-                      onClick={() => {
-                        if (!confirmChapterReset()) return;
-                        void run(
-                          () => api.setBookLevel(detail.id, level.depth),
-                          () => setChapterEdits(false),
-                        );
-                      }}
+                      onClick={() => requestSplit({ kind: "level", depth: level.depth })}
                     >
                       <span>第 {level.depth + 1} 层 · {level.chapterCount} 章</span>
                       {level.sampleTitle && <span className="book-level__sample">{level.sampleTitle}</span>}
@@ -384,13 +393,7 @@ export default function BooksView() {
                     type="button"
                     className={`book-level${detail.splitSource === "spine" ? " book-level--active" : ""}`}
                     disabled={busy || detail.splitSource === "spine"}
-                    onClick={() => {
-                      if (!confirmChapterReset()) return;
-                      void run(
-                        () => api.useBookHeadings(detail.id),
-                        () => setChapterEdits(false),
-                      );
-                    }}
+                    onClick={() => requestSplit({ kind: "spine" })}
                   >
                     <span>按正文标题拆</span>
                     <span className="book-level__sample">用最上一层标题，例如章而不是节</span>
@@ -402,8 +405,11 @@ export default function BooksView() {
                 {detail.splitSource === "spine" && detail.levels.length > 0 && (
                   <p className="book-hint">目录和正文对不上，已按正文标题拆分。也可以改用上面的某一层目录。</p>
                 )}
+                {detail.numberingWarnings.map((warning) => (
+                  <p key={warning} className="book-hint" role="status">{warning}</p>
+                ))}
                 {chapterEdits && (
-                  <p className="book-hint">切换拆分会重新划分章节，刚才的合并和改名会被清掉。</p>
+                  <p className="book-hint">切换拆分前会先确认。确认后重新划分章节，刚才的合并、改名和跳过会被清掉，再切回来也不会恢复。</p>
                 )}
                 <ol className="book-chapters">
                   {detail.chapters.map((chapter, index) => (
@@ -428,7 +434,10 @@ export default function BooksView() {
                         className="btn btn--ghost btn--sm"
                         type="button"
                         disabled={busy}
-                        onClick={() => void run(() => api.setBookChapterSkipped(detail.id, chapter.id, !chapter.skipped))}
+                        onClick={() => void run(
+                          () => api.setBookChapterSkipped(detail.id, chapter.id, !chapter.skipped),
+                          () => setChapterEdits(true),
+                        )}
                       >
                         {chapter.skipped ? "恢复这章" : "跳过这章"}
                       </button>
@@ -488,6 +497,28 @@ export default function BooksView() {
           </>
         )}
       </section>
+      {pendingSplit && (
+        <div className="modal-backdrop" onMouseDown={() => setPendingSplit(null)} role="presentation">
+          <div
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="split-reset-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="modal__head">
+              <span className="modal__title" id="split-reset-title">重新划分章节</span>
+            </div>
+            <div className="modal__body">
+              <p>切换拆分会重新划分章节，刚才的合并、改名和跳过会被清掉。再切回来也不会恢复这些修改。</p>
+              <div className="board-dialog__actions">
+                <button className="btn btn--ghost" type="button" onClick={() => setPendingSplit(null)}>取消</button>
+                <button className="btn btn--primary" type="button" onClick={() => applySplit(pendingSplit)}>继续切换</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

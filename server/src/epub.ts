@@ -60,6 +60,8 @@ export interface ParsedEpub {
   splitSource: SplitSource;
   levels: SplitLevel[];
   selectedLevel: number | null;
+  /** 章号不连续时的非阻断提示，例如「第十回可能缺失」。不阻止导入。 */
+  numberingWarnings: string[];
   documents: ParsedDocument[];
   toc: TocNode[];
   chapters: ParsedChapter[];
@@ -139,6 +141,7 @@ export function parseEpub(data: Buffer): ParsedEpub {
     splitSource: planned.source,
     levels: planned.levels,
     selectedLevel: planned.selectedLevel,
+    numberingWarnings: planned.numberingWarnings,
     documents,
     toc,
     chapters: planned.chapters,
@@ -163,10 +166,11 @@ export function planSplits(documents: ParsedDocument[], toc: TocNode[]): {
   levels: SplitLevel[];
   selectedLevel: number | null;
   chapters: ParsedChapter[];
+  numberingWarnings: string[];
 } {
   const spineChapters = chaptersFromSpine(documents);
   if (toc.length === 0) {
-    return { source: "spine", levels: [], selectedLevel: null, chapters: spineChapters };
+    return planResult("spine", [], null, spineChapters);
   }
   const maxDepth = treeDepth(toc);
   const built: Array<{ depth: number; chapters: ParsedChapter[]; cuts: number; resolved: number }> = [];
@@ -177,7 +181,7 @@ export function planSplits(documents: ParsedDocument[], toc: TocNode[]): {
     built.push({ depth, ...level });
   }
   if (built.length === 0) {
-    return { source: "spine", levels: [], selectedLevel: null, chapters: spineChapters };
+    return planResult("spine", [], null, spineChapters);
   }
   let best = built[0];
   let bestScore = scoreChapters(best.chapters);
@@ -190,15 +194,36 @@ export function planSplits(documents: ParsedDocument[], toc: TocNode[]): {
   }
   const totalChars = documents.reduce((sum, document) => sum + [...document.text].length, 0);
   const useSpine = isPoorSplit(best.chapters, spineChapters, totalChars);
-  return {
-    source: useSpine ? "spine" : "toc",
-    levels: built.map((level) => ({
+  return planResult(
+    useSpine ? "spine" : "toc",
+    built.map((level) => ({
       depth: level.depth,
       chapterCount: level.chapters.length,
       sampleTitle: sampleTitle(level.chapters),
     })),
-    selectedLevel: useSpine ? null : best.depth,
-    chapters: useSpine ? spineChapters : best.chapters,
+    useSpine ? null : best.depth,
+    useSpine ? spineChapters : best.chapters,
+  );
+}
+
+function planResult(
+  source: SplitSource,
+  levels: SplitLevel[],
+  selectedLevel: number | null,
+  chapters: ParsedChapter[],
+): {
+  source: SplitSource;
+  levels: SplitLevel[];
+  selectedLevel: number | null;
+  chapters: ParsedChapter[];
+  numberingWarnings: string[];
+} {
+  return {
+    source,
+    levels,
+    selectedLevel,
+    chapters,
+    numberingWarnings: chapterNumberWarnings(chapters.map((chapter) => chapter.title)),
   };
 }
 
@@ -237,7 +262,7 @@ export function cleanBookTitle(raw: string): string {
 
 export function detectBookType(titles: string[], meta: string): BookType {
   if (/小说|长篇小说|虚构小说|\bnovel\b|\bfiction\b/i.test(meta)) return "fiction";
-  const bare = titles.filter((title) => /^第\s*[0-9０-９一二三四五六七八九十百千零〇两]+\s*[章回]$/u.test(title.trim()));
+  const bare = titles.filter((title) => /^第\s*[0-9０-９一二三四五六七八九十百千零〇○◯ＯｏOo两廿卅]+\s*[章回]$/u.test(title.trim()));
   if (titles.length >= 8 && bare.length / titles.length >= 0.6) return "fiction";
   return "nonfiction";
 }
@@ -271,10 +296,10 @@ function corrupt(): ReadingError {
 
 function chapterTitleScore(title: string): number {
   const text = title.trim();
-  if (/第\s*[0-9０-９一二三四五六七八九十百千零〇两]+\s*章/u.test(text) || /^chapter\s+\d+/i.test(text)) return 5;
-  if (/第\s*[0-9０-９一二三四五六七八九十百千零〇两]+\s*回/u.test(text)) return 4;
-  if (/第\s*[0-9０-９一二三四五六七八九十百千零〇两]+\s*[节讲课]/u.test(text)) return 2;
-  if (/第\s*[0-9０-９一二三四五六七八九十百千零〇两]+\s*[篇部卷]/u.test(text)) return 1;
+  if (/第\s*[0-9０-９一二三四五六七八九十百千零〇○◯ＯｏOo两廿卅]+\s*章/u.test(text) || /^chapter\s+\d+/i.test(text)) return 5;
+  if (/第\s*[0-9０-９一二三四五六七八九十百千零〇○◯ＯｏOo两廿卅]+\s*回/u.test(text)) return 4;
+  if (/第\s*[0-9０-９一二三四五六七八九十百千零〇○◯ＯｏOo两廿卅]+\s*[节讲课]/u.test(text)) return 2;
+  if (/第\s*[0-9０-９一二三四五六七八九十百千零〇○◯ＯｏOo两廿卅]+\s*[篇部卷]/u.test(text)) return 1;
   return 0;
 }
 
@@ -419,9 +444,133 @@ export function isFrontMatterTitle(title: string): boolean {
   return /^(目录|目次|封面|书名页|扉页|版权页?|版权信息|copyright|cover)$/i.test(text);
 }
 
+const TINY_CHAPTER_CHARS = 200;
+const CN_DIGITS = "0-9０-９一二三四五六七八九十百千零〇○◯ＯｏOo两廿卅";
+const CHAPTER_INDEX_RE = new RegExp(`第\\s*([${CN_DIGITS}]+)\\s*([章节回部篇卷])`, "u");
+
+export function readChapterIndex(title: string): { number: number; unit: string } | null {
+  const match = CHAPTER_INDEX_RE.exec(title.trim());
+  if (!match) return null;
+  const number = parseChineseNumber(match[1]);
+  if (number === null || number <= 0 || number > 9999) return null;
+  return { number, unit: match[2] };
+}
+
+/** 章号有空档时给出提示。空档可以是原书如此，导入仍然成功。 */
+export function chapterNumberWarnings(titles: string[]): string[] {
+  const groups = new Map<string, number[]>();
+  for (const title of titles) {
+    const parsed = readChapterIndex(title);
+    if (!parsed) continue;
+    const numbers = groups.get(parsed.unit) ?? [];
+    numbers.push(parsed.number);
+    groups.set(parsed.unit, numbers);
+  }
+  let unit = "";
+  let numbers: number[] = [];
+  for (const [candidate, values] of groups) {
+    if (values.length > numbers.length) {
+      unit = candidate;
+      numbers = values;
+    }
+  }
+  if (numbers.length < 2) return [];
+  const present = new Set(numbers);
+  const sorted = [...present].sort((left, right) => left - right);
+  const missing: number[] = [];
+  for (let value = sorted[0]; value <= sorted[sorted.length - 1]; value++) {
+    if (!present.has(value)) missing.push(value);
+  }
+  if (missing.length === 0) return [];
+  const shown = missing.slice(0, 20).map((value) => `第${formatChineseNumber(value)}${unit}`);
+  const suffix = missing.length > shown.length ? "等" : "";
+  return [`${shown.join("、")}${suffix}可能缺失`];
+}
+
+function parseChineseNumber(raw: string): number | null {
+  const text = raw.trim().replace(/廿/g, "二十").replace(/卅/g, "三十").replace(/[０-９]/g, (char) => String(char.charCodeAt(0) - 0xff10));
+  if (!text) return null;
+  if (!/[十百千]/.test(text)) {
+    let digits = "";
+    for (const char of text) {
+      const digit = positionalDigit(char);
+      if (digit === null) return null;
+      digits += digit;
+    }
+    if (!digits) return null;
+    const value = Number(digits);
+    return Number.isSafeInteger(value) ? value : null;
+  }
+  const digitValue: Record<string, number> = { 一: 1, 二: 2, 两: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
+  const unitValue: Record<string, number> = { 十: 10, 百: 100, 千: 1000 };
+  let total = 0;
+  let current = 0;
+  let seen = false;
+  for (const char of text) {
+    if (/[0-9]/.test(char)) {
+      current = current * 10 + Number(char);
+      seen = true;
+      continue;
+    }
+    if (positionalDigit(char) === "0") {
+      seen = true;
+      continue;
+    }
+    if (char in digitValue) {
+      current = digitValue[char];
+      seen = true;
+      continue;
+    }
+    if (char in unitValue) {
+      total += (current || 1) * unitValue[char];
+      current = 0;
+      seen = true;
+      continue;
+    }
+    return null;
+  }
+  if (!seen) return null;
+  return total + current;
+}
+
+function positionalDigit(char: string): string | null {
+  if (/[0-9]/.test(char)) return char;
+  if (/[０零〇○◯ＯｏOo]/.test(char)) return "0";
+  const digits: Record<string, string> = { 一: "1", 二: "2", 两: "2", 三: "3", 四: "4", 五: "5", 六: "6", 七: "7", 八: "8", 九: "9" };
+  return digits[char] ?? null;
+}
+
+function formatChineseNumber(value: number): string {
+  const digits = "零一二三四五六七八九";
+  if (value < 10) return digits[value] || String(value);
+  if (value < 20) return `十${value === 10 ? "" : digits[value % 10]}`;
+  if (value < 100) return `${digits[Math.floor(value / 10)]}十${value % 10 ? digits[value % 10] : ""}`;
+  if (value < 1000) {
+    const rest = value % 100;
+    const hundreds = `${digits[Math.floor(value / 100)]}百`;
+    if (rest === 0) return hundreds;
+    if (rest < 10) return `${hundreds}零${digits[rest]}`;
+    return `${hundreds}${formatChineseNumber(rest)}`;
+  }
+  return String(value);
+}
+
 function chaptersFromSpine(documents: ParsedDocument[]): ParsedChapter[] {
+  const suppressed = new Set<number>();
+  const forced: Cut[] = [];
+  documents.forEach((document, doc) => {
+    const label = isolatedFrontMatterTitle(document);
+    if (!label) return;
+    suppressed.add(doc);
+    forced.push({
+      title: normalizeTitle(label),
+      pos: { doc, offset: 0 },
+      spanStart: { doc, offset: 0 },
+    });
+  });
   const candidates: Array<{ rank: number; cut: Cut }> = [];
   documents.forEach((document, doc) => {
+    if (suppressed.has(doc)) return;
     for (const heading of document.headings) {
       const rank = splitRank(heading);
       if (rank >= 99) continue;
@@ -437,20 +586,25 @@ function chaptersFromSpine(documents: ParsedDocument[]): ParsedChapter[] {
   });
   const ranks = [...new Set(candidates.map((item) => item.rank))].sort((left, right) => left - right);
   for (const rank of ranks) {
-    const points = candidates.filter((item) => item.rank === rank).map((item) => item.cut);
+    const points = [
+      ...forced,
+      ...candidates.filter((item) => item.rank === rank).map((item) => item.cut),
+    ];
     if (points.length < 2) continue;
-    const chapters = chaptersFromCuts(documents, points);
-    if (chapters.length >= 2) return chapters;
+    const split = chaptersFromCuts(documents, points);
+    if (split.length < 2) continue;
+    return finishChapters(mergeTinyFragments(split));
   }
   const chapters: ParsedChapter[] = [];
   documents.forEach((document, doc) => {
     const text = normalizeChapterText(document.text);
-    if ([...text].length < MIN_CHAPTER_CHARS) return;
+    if ([...text].length < MIN_CHAPTER_CHARS && !suppressed.has(doc)) return;
+    const front = isolatedFrontMatterTitle(document);
     const heading = document.headings.find((item) => isChapterHeading(item.text))
       ?? document.headings.find((item) => item.text.trim().length > 0 && item.text.trim().length <= 40);
     const firstLine = text.split("\n").map((line) => line.trim()).find((line) => line.length >= 2 && line.length <= 40);
     chapters.push({
-      title: normalizeTitle(heading?.text || firstLine || `第${chapters.length + 1}部分`),
+      title: normalizeTitle(front || heading?.text || firstLine || `第${chapters.length + 1}部分`),
       startDoc: doc,
       startOffset: 0,
       endDoc: doc,
@@ -459,7 +613,7 @@ function chaptersFromSpine(documents: ParsedDocument[]): ParsedChapter[] {
       skipped: false,
     });
   });
-  if (chapters.length > 0) return finishChapters(chapters);
+  if (chapters.length > 0) return finishChapters(mergeTinyFragments(chapters));
   const combined = normalizeChapterText(documents.map((document) => document.text).join("\n"));
   if ([...combined].length < MIN_CHAPTER_CHARS) return [];
   return finishChapters([{
@@ -473,6 +627,65 @@ function chaptersFromSpine(documents: ParsedDocument[]): ParsedChapter[] {
   }]);
 }
 
+function isolatedFrontMatterTitle(document: ParsedDocument): string | null {
+  const first = document.text.split("\n").map((line) => line.trim()).find(Boolean) || "";
+  const compact = first.replace(/\s+/g, "");
+  if (isFrontMatterTitle(compact)) return compact;
+  if (isTocLikeDocument(document)) return "目录";
+  if (isCopyrightDocument(document)) return "版权页";
+  return null;
+}
+
+function isTocLikeDocument(document: ParsedDocument): boolean {
+  const lines = document.text.split("\n").map((line) => line.trim()).filter(Boolean);
+  const headingLines = lines.filter((line) => [...line].length <= 40 && isChapterHeading(line));
+  if (headingLines.length < 5) return false;
+  const headingChars = headingLines.reduce((sum, line) => sum + [...line].length, 0);
+  const total = [...document.text].length;
+  return total > 0 && (total - headingChars) / total < 0.45;
+}
+
+function isCopyrightDocument(document: ParsedDocument): boolean {
+  const compact = document.text.replace(/\s+/g, "");
+  if ([...compact].length === 0 || [...compact].length > 1500) return false;
+  return /图书在版编目|版权所有|版权信息|ISBN/i.test(document.text);
+}
+
+function mergeTinyFragments(chapters: ParsedChapter[]): ParsedChapter[] {
+  const tiny = chapters.map((chapter) => !isFrontMatterTitle(chapter.title) && [...chapter.text].length < TINY_CHAPTER_CHARS);
+  if (!tiny.some(Boolean)) return chapters;
+  const consumed = new Set<number>();
+  const result: ParsedChapter[] = [];
+  chapters.forEach((chapter, index) => {
+    if (consumed.has(index) || tiny[index]) return;
+    const parts: ParsedChapter[] = [];
+    for (let previous = index - 1; previous >= 0 && tiny[previous] && !consumed.has(previous); previous--) {
+      parts.unshift(chapters[previous]);
+      consumed.add(previous);
+    }
+    parts.push(chapter);
+    result.push(combineChapters(parts, chapter));
+  });
+  const trailing = chapters.filter((chapter, index) => tiny[index] && !consumed.has(index));
+  if (trailing.length === 0) return result;
+  if (result.length === 0) return [combineChapters(trailing, trailing[trailing.length - 1])];
+  const last = result[result.length - 1];
+  result[result.length - 1] = combineChapters([last, ...trailing], last);
+  return result;
+}
+
+function combineChapters(parts: ParsedChapter[], anchor: ParsedChapter): ParsedChapter {
+  const text = normalizeChapterText(parts.map((part) => part.text).join("\n"));
+  return {
+    ...anchor,
+    text,
+    startDoc: parts[0].startDoc,
+    startOffset: parts[0].startOffset,
+    endDoc: parts[parts.length - 1].endDoc,
+    endOffset: parts[parts.length - 1].endOffset,
+  };
+}
+
 function splitRank(heading: TextHeading): number {
   const semantic = semanticRank(heading.text);
   if (semantic >= 0) return semantic;
@@ -483,9 +696,9 @@ function splitRank(heading: TextHeading): number {
 
 function semanticRank(title: string): number {
   const text = title.trim();
-  if (/第\s*[0-9０-９一二三四五六七八九十百千零〇两]+\s*[篇部卷]/u.test(text)) return 0;
-  if (/第\s*[0-9０-９一二三四五六七八九十百千零〇两]+\s*[章回]/u.test(text) || /^chapter\s+\d+/i.test(text)) return 1;
-  if (/第\s*[0-9０-９一二三四五六七八九十百千零〇两]+\s*[节讲课]/u.test(text) || /^section\s+\d+/i.test(text)) return 2;
+  if (/第\s*[0-9０-９一二三四五六七八九十百千零〇○◯ＯｏOo两廿卅]+\s*[篇部卷]/u.test(text)) return 0;
+  if (/第\s*[0-9０-９一二三四五六七八九十百千零〇○◯ＯｏOo两廿卅]+\s*[章回]/u.test(text) || /^chapter\s+\d+/i.test(text)) return 1;
+  if (/第\s*[0-9０-９一二三四五六七八九十百千零〇○◯ＯｏOo两廿卅]+\s*[节讲课]/u.test(text) || /^section\s+\d+/i.test(text)) return 2;
   return -1;
 }
 
@@ -493,14 +706,14 @@ function isChapterHeading(title: string): boolean {
   const text = title.trim();
   if (text.length < 2 || text.length > 80) return false;
   if (/[。！？]/u.test(text)) return false;
-  return /^第\s*[0-9０-９一二三四五六七八九十百千零〇两]+\s*[章节回部篇卷]/u.test(text) || /^chapter\s+\d+\b/i.test(text);
+  return /^第\s*[0-9０-９一二三四五六七八九十百千零〇○◯ＯｏOo两廿卅]+\s*[章节回部篇卷]/u.test(text) || /^chapter\s+\d+\b/i.test(text);
 }
 
 /** 一行以「第X章/回」开头，后面如果是正文，标题只取到句读之前。 */
 function standaloneChapterTitle(line: string): string | null {
   const text = line.trim();
   if ([...text].length < 2 || [...text].length > 200) return null;
-  const match = /^(第\s*[0-9０-９一二三四五六七八九十百千零〇两]+\s*[章节回部篇卷]|chapter\s+\d+)/iu.exec(text);
+  const match = /^(第\s*[0-9０-９一二三四五六七八九十百千零〇○◯ＯｏOo两廿卅]+\s*[章节回部篇卷]|chapter\s+\d+)/iu.exec(text);
   if (!match) return null;
   const rest = text.slice(match[0].length);
   if (rest && !/^\s/u.test(rest)) return null;

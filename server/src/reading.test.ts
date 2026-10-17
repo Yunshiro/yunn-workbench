@@ -9,7 +9,7 @@ import { deflateRawSync } from "node:zlib";
 import { pathToFileURL, fileURLToPath } from "node:url";
 import { DB_PATH, MODEL_PROFILES_PATH } from "./config.js";
 import { db } from "./db.js";
-import { cleanBookTitle, detectBookType, parseEpub, type TocNode } from "./epub.js";
+import { chapterNumberWarnings, cleanBookTitle, detectBookType, parseEpub, readChapterIndex, type TocNode } from "./epub.js";
 import { app } from "./http.js";
 import { locateQuote, stripVerdicts, verifyQuotes } from "./reading-quotes.js";
 import { setReadingModelForTests, type ReadingPrompt } from "./reading-model.js";
@@ -357,7 +357,7 @@ describe("reading epub", () => {
       ncx: false,
       spine: ["all.xhtml"],
       files: {
-        "all.xhtml": xhtml("<h1>第三章 海边</h1><p>海风把这句可以核对的话留在岸边，这段写得足够长。</p><h1>第四章 山里</h1><p>山路把另一句可以核对的话藏进雾里，这段也写得足够长。</p>"),
+        "all.xhtml": xhtml(`<h1>第三章 海边</h1><p>${"海风把这句可以核对的话留在岸边，这段写得足够长。".repeat(12)}</p><h1>第四章 山里</h1><p>${"山路把另一句可以核对的话藏进雾里，这段也写得足够长。".repeat(12)}</p>`),
       },
     }));
     assert.equal(parsed.splitSource, "spine");
@@ -373,16 +373,17 @@ describe("reading epub", () => {
       ncx: false,
       spine: ["body.xhtml"],
       files: {
-        "body.xhtml": xhtml(`<p>版权留在正文里。</p>
+        "body.xhtml": xhtml(`<p>版权留在正文里。${"开头这段要单独成章，所以写得比后面的回目更铺得开。".repeat(8)}</p>
 <p>上一回的人说到这里。要知端的，下回分解。
 第一回 甄士隐遇见贾雨村</p>
-<p>海风把这句可以核对的话留在原处，这段写得足够长，不能被切掉。后文继续沿着岸边往下写，把这一回垫到足以单独成章。</p>
+<p>${"海风把这句可以核对的话留在原处，这段写得足够长，不能被切掉。".repeat(8)}</p>
 <p>这一回也到了结尾。下回分解。
 第二回</p>
-<p>冷子兴把荣国府的事说完，这段同样写得足够长，不能并进上一回。后面又补了几句，好让这一回比开头的版权说明长得多。</p>
+<p>${"冷子兴把荣国府的事说完，这段同样写得足够长，不能并进上一回。".repeat(8)}</p>
 <p>第四回中既将薛家母子寄居的事略已表明，此回则接着写林黛玉，这段是正文不是新的一回。</p>
 <p>下回分解。
-第三回 贾雨村复职，话说雨村刚欲过渡，就遇见了故人，这段写得足够长。雨村过了河又遇见故人，这一回因此也能单独成章。</p>`),
+第三回 贾雨村复职，话说雨村刚欲过渡，就遇见了故人，这段写得足够长。</p>
+<p>${"雨村过了河又遇见故人，这一回因此也能单独成章。".repeat(8)}</p>`),
       },
     }));
     assert.equal(parsed.splitSource, "spine");
@@ -405,7 +406,7 @@ describe("reading epub", () => {
       ],
       spine: ["body.xhtml"],
       files: {
-        "body.xhtml": xhtml("<p>第五章 城里</p><p>城里这一句是正文里真实的章节标题，这段写得足够长。</p><p>第六章 郊外</p><p>郊外这一句跟在后面，不能丢，这段也写得足够长。</p>"),
+        "body.xhtml": xhtml(`<p>第五章 城里</p><p>${"城里这一句是正文里真实的章节标题，这段写得足够长。".repeat(12)}</p><p>第六章 郊外</p><p>${"郊外这一句跟在后面，不能丢，这段也写得足够长。".repeat(12)}</p>`),
       },
     }));
     assert.equal(parsed.splitSource, "spine");
@@ -705,10 +706,11 @@ describe("reading flow", () => {
       files: { "c.xhtml": xhtml(`<p>${marker}</p>`) },
     }));
     removeReading(book.id);
-    db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
-    const files = [DB_PATH, `${DB_PATH}-wal`, `${DB_PATH}-shm`].filter((path) => existsSync(path));
-    const blob = Buffer.concat(files.map((path) => readFileSync(path)));
-    assert.equal(blob.includes(marker), false);
+    const database = readFileSync(DB_PATH);
+    const walPath = `${DB_PATH}-wal`;
+    const wal = existsSync(walPath) ? readFileSync(walPath) : Buffer.alloc(0);
+    assert.equal(database.includes(marker), false);
+    assert.equal(wal.includes(marker), false);
   });
 
   it("turns an interrupted run back into a resumable error", () => {
@@ -814,12 +816,62 @@ function coverageRatio(parsed: { documents: { text: string }[]; chapters: { text
 }
 
 describe("reading public fixtures", () => {
-  it("keeps the journey to the west when the toc only points at the license", () => {
+  it("keeps all one hundred chapters of the journey to the west", () => {
     const parsed = parseEpub(readFileSync(join(readingFixtures, "gut_23962.epub")));
     const hui = parsed.chapters.filter((chapter) => /第.+回/.test(chapter.title));
+    const numbers = hui.map((chapter) => readChapterIndex(chapter.title)?.number ?? 0).sort((left, right) => left - right);
     assert.equal(parsed.splitSource, "spine");
-    assert.ok(hui.length >= 88 && hui.length <= 95, `回目数量 ${hui.length}`);
+    assert.equal(hui.length, 100);
+    assert.deepEqual(numbers, Array.from({ length: 100 }, (_, index) => index + 1));
+    assert.deepEqual(parsed.numberingWarnings, []);
     assert.ok(coverageRatio(parsed) >= 0.9, `覆盖率 ${coverageRatio(parsed)}`);
+  });
+
+  it("imports a gapped chapter sequence and warns without failing", () => {
+    const body = chapterBook({
+      title: "缺了一章",
+      toc: [],
+      ncx: false,
+      spine: ["a.xhtml", "b.xhtml", "c.xhtml"],
+      files: {
+        "a.xhtml": xhtml(`<h1>第一章 开始</h1><p>${"这章正文写得足够长，用来确认导入没有因为缺号而失败。".repeat(8)}</p>`),
+        "b.xhtml": xhtml(`<h1>第二章 中间</h1><p>${"这章正文也写得足够长，缺的是后面的号而不是这一章。".repeat(8)}</p>`),
+        "c.xhtml": xhtml(`<h1>第四章 跳过了三</h1><p>${"这章正文同样写得足够长，第三章没有出现在正文里。".repeat(8)}</p>`),
+      },
+    });
+    const parsed = parseEpub(body);
+    assert.equal(parsed.chapters.length, 3);
+    assert.deepEqual(parsed.numberingWarnings, ["第三章可能缺失"]);
+    const book = importEpubBuffer(body);
+    assert.equal(book.status, "preview");
+    assert.equal(book.chapters.length, 3);
+    assert.deepEqual(book.numberingWarnings, ["第三章可能缺失"]);
+    assert.deepEqual(chapterNumberWarnings(book.chapters.map((chapter) => chapter.title)), ["第三章可能缺失"]);
+  });
+
+  it("keeps a contents page out of the body-heading split", () => {
+    const labels = ["一", "二", "三", "四", "五", "六", "七", "八"];
+    const parsed = parseEpub(chapterBook({
+      title: "带目录页",
+      toc: [],
+      ncx: false,
+      spine: ["toc.xhtml", "c1.xhtml", "c2.xhtml", "copy.xhtml"],
+      files: {
+        "toc.xhtml": xhtml(`<h1>目录</h1>${labels.map((label) => `<p>第${label}章</p>`).join("")}`),
+        "c1.xhtml": xhtml(`<h2>第一章</h2><p>${"海边这一章写得很长，海风把这句可以核对的话留在岸边。".repeat(8)}</p>`),
+        "c2.xhtml": xhtml(`<h2>第二章</h2><p>${"山里这一章同样写得很长，山路把另一句可以核对的话藏进雾里。".repeat(8)}</p>`),
+        "copy.xhtml": xhtml("<p>图书在版编目（CIP）数据</p><p>示例 / 作者 著。ISBN 7-0000-0000-0</p><p>版权所有，翻印必究。</p>"),
+      },
+    }));
+    assert.equal(parsed.splitSource, "spine");
+    assert.equal(parsed.chapters.filter((chapter) => chapter.title === "第一章").length, 1);
+    assert.equal(parsed.chapters.filter((chapter) => chapter.title === "第二章").length, 1);
+    assert.equal(parsed.chapters.find((chapter) => chapter.title === "目录")?.skipped, true);
+    assert.equal(parsed.chapters.find((chapter) => chapter.title === "版权页")?.skipped, true);
+    const first = parsed.chapters.find((chapter) => chapter.title === "第一章");
+    assert.match(first?.text || "", /海风把这句/);
+    assert.ok([...(first?.text || "")].length > 200);
+    assert.equal(parsed.chapters.some((chapter) => !chapter.skipped && [...chapter.text].length < 200), false);
   });
 
   it("falls back when toc anchors miss or the toc is a single cover entry", () => {

@@ -352,6 +352,7 @@ export interface BookChapter {
 export interface BookDetail extends BookSummary {
   chapters: BookChapter[];
   report: BookReport | null;
+  numberingWarnings: string[];
 }
 
 export interface PromptConfigResponse {

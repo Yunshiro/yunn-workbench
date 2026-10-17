@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { BookType, ParsedChapter, ParsedDocument, SplitLevel, SplitSource, TocNode } from "./epub.js";
+import { chapterNumberWarnings, type BookType, type ParsedChapter, type ParsedDocument, type SplitLevel, type SplitSource, type TocNode } from "./epub.js";
 import type { BookReport, ChapterNote } from "./reading-notes.js";
 import { db } from "./db.js";
 
@@ -45,6 +45,7 @@ export interface BookChapterView {
 export interface BookDetail extends BookSummary {
   chapters: BookChapterView[];
   report: BookReport | null;
+  numberingWarnings: string[];
 }
 
 export interface StoredDocument {
@@ -100,7 +101,13 @@ export function getBook(id: string): BookSummary | null {
 export function getBookDetail(id: string): BookDetail | null {
   const book = getBook(id);
   if (!book) return null;
-  return { ...book, chapters: listChapterViews(id), report: getReport(id) };
+  const chapters = listChapterViews(id);
+  return {
+    ...book,
+    chapters,
+    report: getReport(id),
+    numberingWarnings: chapterNumberWarnings(chapters.map((chapter) => chapter.title)),
+  };
 }
 
 export function listChapterViews(bookId: string): BookChapterView[] {
@@ -291,7 +298,10 @@ export function mergeStoredChapters(bookId: string, chapterId: string, documents
 export function deleteBook(id: string): boolean {
   const result = db.prepare("DELETE FROM books WHERE id = ?").run(id);
   const deleted = Number(result.changes) > 0;
-  if (deleted) db.exec("VACUUM");
+  if (deleted) {
+    db.exec("VACUUM");
+    db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+  }
   return deleted;
 }
 
