@@ -353,6 +353,7 @@ export interface BookDetail extends BookSummary {
   chapters: BookChapter[];
   report: BookReport | null;
   numberingWarnings: string[];
+  hasManualEdits: boolean;
 }
 
 export interface PromptConfigResponse {

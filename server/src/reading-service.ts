@@ -110,9 +110,10 @@ export function mergeReadingChapter(bookId: string, chapterId: string): BookDeta
   return getReading(bookId);
 }
 
-export function switchReadingLevel(bookId: string, depth: number): BookDetail {
+export function switchReadingLevel(bookId: string, depth: number, confirm = false): BookDetail {
   const book = requireBook(bookId);
   assertEditable(book);
+  assertSplitConfirmed(bookId, confirm);
   if (!Number.isInteger(depth) || depth < 0) throw new ReadingError("目录层级不正确。");
   const level = book.levels.find((item) => item.depth === depth);
   if (!level) throw new ReadingError("没有这个目录层级。可以改为按正文标题拆。");
@@ -123,9 +124,10 @@ export function switchReadingLevel(bookId: string, depth: number): BookDetail {
   return getReading(bookId);
 }
 
-export function switchReadingToHeadings(bookId: string): BookDetail {
+export function switchReadingToHeadings(bookId: string, confirm = false): BookDetail {
   const book = requireBook(bookId);
   assertEditable(book);
+  assertSplitConfirmed(bookId, confirm);
   const chapters = splitByBodyHeadings(storedDocuments(bookId));
   if (chapters.length === 0) throw new ReadingError("没有从正文标题里拆出章节。");
   replaceChapters(bookId, { source: "spine", level: null }, chapters);
@@ -278,6 +280,13 @@ function requireBook(id: string): BookSummary {
 function assertEditable(book: BookSummary): void {
   if (book.confirmed || book.status === "reading") {
     throw new ReadingError("章节已经确认，不能再改划分。还没生成完的章节可以继续，已完成的不会重跑。", 409);
+  }
+}
+
+function assertSplitConfirmed(bookId: string, confirm: boolean): void {
+  const detail = getBookDetail(bookId);
+  if (detail?.hasManualEdits && !confirm) {
+    throw new ReadingError("章节已有手动修改。切换拆分会清掉合并、改名和跳过，请确认后再切换。", 409);
   }
 }
 

@@ -254,10 +254,10 @@ export const api = {
   },
   updateBook: (id: string, input: { title?: string; author?: string; bookType?: BookType; rebuild?: boolean }) =>
     fetch(`/api/books/${id}`, { method: "PATCH", headers: jsonHeaders, body: JSON.stringify(input) }).then((r) => parse<BookDetail>(r)),
-  setBookLevel: (id: string, level: number) =>
-    fetch(`/api/books/${id}/level`, { method: "POST", headers: jsonHeaders, body: JSON.stringify({ level }) }).then((r) => parse<BookDetail>(r)),
-  useBookHeadings: (id: string) =>
-    fetch(`/api/books/${id}/level`, { method: "POST", headers: jsonHeaders, body: JSON.stringify({ source: "spine" }) }).then((r) => parse<BookDetail>(r)),
+  setBookLevel: (id: string, level: number, confirm = false) =>
+    fetch(`/api/books/${id}/level`, { method: "POST", headers: jsonHeaders, body: JSON.stringify({ level, confirm }) }).then((r) => parse<BookDetail>(r)),
+  useBookHeadings: (id: string, confirm = false) =>
+    fetch(`/api/books/${id}/level`, { method: "POST", headers: jsonHeaders, body: JSON.stringify({ source: "spine", confirm }) }).then((r) => parse<BookDetail>(r)),
   setBookChapterSkipped: (id: string, chapterId: string, skipped: boolean) =>
     fetch(`/api/books/${id}/chapters/${chapterId}/skip`, { method: "POST", headers: jsonHeaders, body: JSON.stringify({ skipped }) }).then((r) => parse<BookDetail>(r)),
   renameBookChapter: (id: string, chapterId: string, title: string) =>

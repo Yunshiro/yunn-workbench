@@ -23,8 +23,10 @@ import {
   removeReading,
   renameReadingChapter,
   reopenReading,
+  setReadingChapterSkipped,
   startReading,
   switchReadingLevel,
+  switchReadingToHeadings,
   updateReading,
 } from "./reading-service.js";
 import { getBookDetail, listChaptersWithText } from "./reading-db.js";
@@ -215,6 +217,7 @@ process.stdout.write(JSON.stringify({
   author: detail.author,
   status: detail.status,
   confirmed: detail.confirmed,
+  hasManualEdits: detail.hasManualEdits,
   chapters: detail.chapters.map((chapter) => ({ title: chapter.title, outline: chapter.note?.outline || null, quote: chapter.note?.quotes[0]?.text || null })),
   overview: detail.report?.overview || null,
 }));
@@ -230,6 +233,7 @@ process.stdout.write(JSON.stringify({
     author: string;
     status: string;
     confirmed: boolean;
+    hasManualEdits: boolean;
     chapters: { title: string; outline: string | null; quote: string | null }[];
     overview: string | null;
   };
@@ -512,7 +516,7 @@ describe("reading flow", () => {
     const merged = mergeReadingChapter(book.id, getBookDetail(book.id)!.chapters[1].id);
     assert.deepEqual(merged.chapters.map((chapter) => chapter.title), ["引言", "第一章 改名"]);
     assert.match(listChaptersWithText(book.id)[1].text, /分散这一章/);
-    const switched = switchReadingLevel(book.id, 0);
+    const switched = switchReadingLevel(book.id, 0, true);
     assert.deepEqual(switched.chapters.map((chapter) => chapter.title), ["引言", "第一篇"]);
     assert.match(listChaptersWithText(book.id)[1].text, /聚集这一章/);
     assert.match(listChaptersWithText(book.id)[1].text, /分散这一章/);
@@ -522,6 +526,39 @@ describe("reading flow", () => {
     assert.equal(restarted.author, "改过的作者");
     assert.deepEqual(restarted.chapters.map((chapter) => chapter.title), ["引言", "第一篇"]);
     assert.equal(restarted.confirmed, false);
+    assert.equal(restarted.hasManualEdits, false);
+  });
+
+  it("requires confirmation to switch after a renamed chapter is loaded again", () => {
+    const book = importEpubBuffer(parts());
+    assert.equal(book.hasManualEdits, false);
+    renameReadingChapter(book.id, book.chapters[1].id, "第一章 改名");
+    const reloaded = freshDetail(book.id);
+    assert.equal(reloaded.hasManualEdits, true);
+    assert.equal(reloaded.chapters[1].title, "第一章 改名");
+    assert.throws(() => switchReadingLevel(book.id, 0), /确认/);
+    assert.throws(() => switchReadingToHeadings(book.id), /确认/);
+    const kept = getBookDetail(book.id)!;
+    assert.equal(kept.chapters[1].title, "第一章 改名");
+    assert.equal(kept.splitSource, book.splitSource);
+    assert.equal(kept.splitLevel, book.splitLevel);
+    const switched = switchReadingToHeadings(book.id, true);
+    assert.equal(switched.hasManualEdits, false);
+    assert.equal(switched.chapters.some((chapter) => chapter.title === "第一章 改名"), false);
+  });
+
+  it("treats a merge or a skip that differs from the default as a manual edit", () => {
+    const book = importEpubBuffer(parts());
+    const skipped = setReadingChapterSkipped(book.id, book.chapters[1].id, true);
+    assert.equal(skipped.hasManualEdits, true);
+    const restored = setReadingChapterSkipped(book.id, book.chapters[1].id, false);
+    assert.equal(restored.hasManualEdits, false);
+    assert.equal(restored.chapters[1].skipped, false);
+    const merged = mergeReadingChapter(book.id, book.chapters[0].id);
+    assert.equal(merged.hasManualEdits, true);
+    assert.throws(() => switchReadingLevel(book.id, 0), /确认/);
+    const switched = switchReadingLevel(book.id, 0, true);
+    assert.equal(switched.hasManualEdits, false);
   });
 
   it("resumes the confirmed chapter set without redoing finished chapters", async () => {
@@ -686,6 +723,12 @@ describe("reading flow", () => {
       },
     }));
     assert.equal(book.chapters[0]?.skipped, true);
+    assert.equal(book.hasManualEdits, false);
+    const unskipped = setReadingChapterSkipped(book.id, book.chapters[0].id, false);
+    assert.equal(unskipped.chapters[0]?.skipped, false);
+    assert.equal(unskipped.hasManualEdits, true);
+    setReadingChapterSkipped(book.id, book.chapters[0].id, true);
+    assert.equal(getBookDetail(book.id)!.hasManualEdits, false);
     assert.equal(book.chapterCount, 1);
     confirmReading(book.id);
     await startReading(book.id);
@@ -768,6 +811,7 @@ describe("reading http", () => {
     const leveled = await level.json();
     assert.equal(level.status, 200);
     assert.equal(leveled.chapters.length, 2);
+    assert.equal(leveled.hasManualEdits, false);
     const merge = await fetch(`${baseUrl}/api/books/${created.body.id}/chapters/${leveled.chapters[0].id}/merge`, { method: "POST" });
     const merged = await merge.json();
     assert.equal(merged.chapters.length, 1);
@@ -792,6 +836,40 @@ describe("reading http", () => {
     assert.equal(countRows("book_notes", created.body.id), 0);
     const missing = await fetch(`${baseUrl}/api/books/${created.body.id}`);
     assert.equal(missing.status, 404);
+  });
+
+  it("requires confirm after a reloaded rename before switching the split", async () => {
+    const created = await postEpub(parts());
+    const chapterId = created.body.chapters[1].id;
+    const renamed = await fetch(`${baseUrl}/api/books/${created.body.id}/chapters/${chapterId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "第一章 改名" }),
+    });
+    assert.equal(renamed.status, 200);
+    const again = await (await fetch(`${baseUrl}/api/books/${created.body.id}`)).json();
+    assert.equal(again.hasManualEdits, true);
+    assert.equal(again.chapters[1].title, "第一章 改名");
+    const blocked = await fetch(`${baseUrl}/api/books/${created.body.id}/level`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source: "spine" }),
+    });
+    const blockedBody = await blocked.json();
+    assert.equal(blocked.status, 409);
+    assert.match(blockedBody.error, /确认/);
+    const still = await (await fetch(`${baseUrl}/api/books/${created.body.id}`)).json();
+    assert.equal(still.chapters[1].title, "第一章 改名");
+    assert.equal(still.splitSource, created.body.splitSource);
+    const allowed = await fetch(`${baseUrl}/api/books/${created.body.id}/level`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source: "spine", confirm: true }),
+    });
+    const switched = await allowed.json();
+    assert.equal(allowed.status, 200);
+    assert.equal(switched.hasManualEdits, false);
+    assert.equal(switched.chapters.some((chapter: { title: string }) => chapter.title === "第一章 改名"), false);
   });
 
   it("returns clear API errors for a corrupt epub", async () => {

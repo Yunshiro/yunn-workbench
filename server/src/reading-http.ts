@@ -65,11 +65,12 @@ export function mountReadingRoutes(app: Express, wrap: Wrap): void {
 
   app.post("/api/books/:id/level", wrap(async (req, res) => {
     try {
+      const confirm = req.body?.confirm === true;
       if (req.body?.source === "spine") {
-        res.json(switchReadingToHeadings(req.params.id));
+        res.json(switchReadingToHeadings(req.params.id, confirm));
         return;
       }
-      res.json(switchReadingLevel(req.params.id, Number(req.body?.level)));
+      res.json(switchReadingLevel(req.params.id, Number(req.body?.level), confirm));
     } catch (error) {
       fail(res, error);
     }

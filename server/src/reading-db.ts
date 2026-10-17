@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { chapterNumberWarnings, type BookType, type ParsedChapter, type ParsedDocument, type SplitLevel, type SplitSource, type TocNode } from "./epub.js";
+import { chapterNumberWarnings, isFrontMatterTitle, type BookType, type ParsedChapter, type ParsedDocument, type SplitLevel, type SplitSource, type TocNode } from "./epub.js";
 import type { BookReport, ChapterNote } from "./reading-notes.js";
 import { db } from "./db.js";
 
@@ -39,6 +39,9 @@ export interface BookChapterView {
   noteStatus: NoteStatus;
   noteError: string | null;
   skipped: boolean;
+  titleEdited: boolean;
+  merged: boolean;
+  skipOverridden: boolean;
   note: ChapterNote | null;
 }
 
@@ -46,6 +49,7 @@ export interface BookDetail extends BookSummary {
   chapters: BookChapterView[];
   report: BookReport | null;
   numberingWarnings: string[];
+  hasManualEdits: boolean;
 }
 
 export interface StoredDocument {
@@ -107,12 +111,14 @@ export function getBookDetail(id: string): BookDetail | null {
     chapters,
     report: getReport(id),
     numberingWarnings: chapterNumberWarnings(chapters.map((chapter) => chapter.title)),
+    hasManualEdits: chapters.some((chapter) => chapter.titleEdited || chapter.merged || chapter.skipOverridden),
   };
 }
 
 export function listChapterViews(bookId: string): BookChapterView[] {
   const rows = db.prepare(`
-    SELECT c.id, c.position, c.title, c.char_count, c.note_status, c.note_error, c.skipped, n.content_json AS note_json
+    SELECT c.id, c.position, c.title, c.char_count, c.note_status, c.note_error, c.skipped,
+      c.title_edited, c.merged, c.skip_overridden, n.content_json AS note_json
     FROM book_chapters c
     LEFT JOIN book_notes n ON n.chapter_id = c.id AND n.kind = 'chapter'
     WHERE c.book_id = ?
@@ -230,11 +236,30 @@ export function updateBookFields(id: string, fields: {
 }
 
 export function updateChapterTitle(id: string, title: string): void {
-  db.prepare("UPDATE book_chapters SET title = ?, updated_at = ? WHERE id = ?").run(title, Date.now(), id);
+  const row = db.prepare("SELECT title, skipped FROM book_chapters WHERE id = ?").get(id) as { title: string; skipped: number } | undefined;
+  if (!row) return;
+  const edited = String(row.title) !== title ? 1 : 0;
+  const overridden = (Number(row.skipped) === 1) !== isFrontMatterTitle(title) ? 1 : 0;
+  db.prepare(`
+    UPDATE book_chapters
+    SET title = ?,
+        title_edited = CASE WHEN title_edited = 1 OR ? = 1 THEN 1 ELSE 0 END,
+        skip_overridden = ?,
+        updated_at = ?
+    WHERE id = ?
+  `).run(title, edited, overridden, Date.now(), id);
 }
 
 export function updateChapterSkipped(id: string, skipped: boolean): void {
-  db.prepare("UPDATE book_chapters SET skipped = ?, updated_at = ? WHERE id = ?").run(skipped ? 1 : 0, Date.now(), id);
+  const row = db.prepare("SELECT title FROM book_chapters WHERE id = ?").get(id) as { title: string } | undefined;
+  if (!row) return;
+  const overridden = skipped !== isFrontMatterTitle(String(row.title)) ? 1 : 0;
+  db.prepare("UPDATE book_chapters SET skipped = ?, skip_overridden = ?, updated_at = ? WHERE id = ?").run(
+    skipped ? 1 : 0,
+    overridden,
+    Date.now(),
+    id,
+  );
 }
 
 export function setChapterStatus(id: string, status: NoteStatus, error: string | null): void {
@@ -283,9 +308,21 @@ export function mergeStoredChapters(bookId: string, chapterId: string, documents
   transaction(() => {
     db.prepare(`
       UPDATE book_chapters
-      SET end_doc = ?, end_offset = ?, text = ?, char_count = ?, updated_at = ?
+      SET end_doc = ?, end_offset = ?, text = ?, char_count = ?, merged = 1,
+          title_edited = CASE WHEN title_edited = 1 OR ? = 1 THEN 1 ELSE 0 END,
+          skip_overridden = CASE WHEN skip_overridden = 1 OR ? = 1 THEN 1 ELSE 0 END,
+          updated_at = ?
       WHERE id = ?
-    `).run(next.endDoc, next.endOffset, text, [...text].length, now, current.id);
+    `).run(
+      next.endDoc,
+      next.endOffset,
+      text,
+      [...text].length,
+      next.titleEdited ? 1 : 0,
+      next.skipOverridden ? 1 : 0,
+      now,
+      current.id,
+    );
     db.prepare("DELETE FROM book_chapters WHERE id = ?").run(next.id);
     const remaining = db.prepare("SELECT id FROM book_chapters WHERE book_id = ? ORDER BY position ASC").all(bookId) as any[];
     remaining.forEach((row, position) => {
@@ -338,8 +375,8 @@ function insertChapters(bookId: string, chapters: ParsedChapter[], now: number):
   const statement = db.prepare(`
     INSERT INTO book_chapters (
       id, book_id, position, title, start_doc, start_offset, end_doc, end_offset,
-      text, char_count, note_status, note_error, skipped, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL, ?, ?, ?)
+      text, char_count, note_status, note_error, skipped, title_edited, merged, skip_overridden, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL, ?, 0, 0, 0, ?, ?)
   `);
   chapters.forEach((chapter, position) => {
     statement.run(
@@ -416,6 +453,9 @@ function rowToChapter(row: any): BookChapterView {
     noteStatus: row.note_status,
     noteError: row.note_error ?? null,
     skipped: Number(row.skipped) === 1,
+    titleEdited: Number(row.title_edited) === 1,
+    merged: Number(row.merged) === 1,
+    skipOverridden: Number(row.skip_overridden) === 1,
     note: row.note_json ? parseJson(row.note_json, null) : null,
   };
 }

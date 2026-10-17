@@ -237,6 +237,9 @@ db.exec(`
     note_status   TEXT NOT NULL DEFAULT 'pending',
     note_error    TEXT,
     skipped       INTEGER NOT NULL DEFAULT 0,
+    title_edited  INTEGER NOT NULL DEFAULT 0,
+    merged        INTEGER NOT NULL DEFAULT 0,
+    skip_overridden INTEGER NOT NULL DEFAULT 0,
     created_at    INTEGER NOT NULL,
     updated_at    INTEGER NOT NULL,
     UNIQUE (book_id, position)
@@ -263,8 +266,17 @@ db.exec(`
 // kb_sessions、kb_messages）如果已经存在，启动时保持原样，不删除、不改写、也不再读写。
 
 const chapterColumns = db.prepare("PRAGMA table_info(book_chapters)").all() as Array<{ name: string }>;
-if (chapterColumns.length > 0 && !chapterColumns.some((column) => column.name === "skipped")) {
-  db.exec("ALTER TABLE book_chapters ADD COLUMN skipped INTEGER NOT NULL DEFAULT 0");
+if (chapterColumns.length > 0) {
+  for (const [name, definition] of [
+    ["skipped", "INTEGER NOT NULL DEFAULT 0"],
+    ["title_edited", "INTEGER NOT NULL DEFAULT 0"],
+    ["merged", "INTEGER NOT NULL DEFAULT 0"],
+    ["skip_overridden", "INTEGER NOT NULL DEFAULT 0"],
+  ] as const) {
+    if (!chapterColumns.some((column) => column.name === name)) {
+      db.exec(`ALTER TABLE book_chapters ADD COLUMN ${name} ${definition}`);
+    }
+  }
 }
 
 // Lightweight forward migration for databases created before research traces existed.

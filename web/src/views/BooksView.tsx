@@ -41,7 +41,6 @@ export default function BooksView() {
   const [detail, setDetail] = useState<BookDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [chapterEdits, setChapterEdits] = useState(false);
   const [pendingSplit, setPendingSplit] = useState<{ kind: "level"; depth: number } | { kind: "spine" } | null>(null);
   const [titleDraft, setTitleDraft] = useState("");
   const [authorDraft, setAuthorDraft] = useState("");
@@ -133,7 +132,7 @@ export default function BooksView() {
 
   function requestSplit(next: { kind: "level"; depth: number } | { kind: "spine" }) {
     if (!detail) return;
-    if (chapterEdits) {
+    if (detail.hasManualEdits) {
       setPendingSplit(next);
       return;
     }
@@ -142,15 +141,14 @@ export default function BooksView() {
 
   function applySplit(next: { kind: "level"; depth: number } | { kind: "spine" }) {
     if (!detail) return;
+    const confirm = detail.hasManualEdits;
     setPendingSplit(null);
-    void run(
-      () => next.kind === "spine" ? api.useBookHeadings(detail.id) : api.setBookLevel(detail.id, next.depth),
-      () => setChapterEdits(false),
-    );
+    void run(() => next.kind === "spine"
+      ? api.useBookHeadings(detail.id, confirm)
+      : api.setBookLevel(detail.id, next.depth, confirm));
   }
 
   function selectBook(id: string) {
-    setChapterEdits(false);
     setPendingSplit(null);
     setSelectedId(id);
     setError(null);
@@ -175,7 +173,6 @@ export default function BooksView() {
     setError(null);
     try {
       const book = await api.importBook(file);
-      setChapterEdits(false);
       applyDetail(book);
       setSelectedId(book.id);
     } catch (err) {
@@ -408,7 +405,7 @@ export default function BooksView() {
                 {detail.numberingWarnings.map((warning) => (
                   <p key={warning} className="book-hint" role="status">{warning}</p>
                 ))}
-                {chapterEdits && (
+                {detail.hasManualEdits && (
                   <p className="book-hint">切换拆分前会先确认。确认后重新划分章节，刚才的合并、改名和跳过会被清掉，再切回来也不会恢复。</p>
                 )}
                 <ol className="book-chapters">
@@ -426,7 +423,7 @@ export default function BooksView() {
                             setChapterDrafts((current) => ({ ...current, [chapter.id]: chapter.title }));
                             return;
                           }
-                          void run(() => api.renameBookChapter(detail.id, chapter.id, title), () => setChapterEdits(true));
+                          void run(() => api.renameBookChapter(detail.id, chapter.id, title));
                         }}
                       />
                       <span className="book-chapter__chars">{chapter.skipped ? "已跳过" : formatChars(chapter.charCount)}</span>
@@ -434,10 +431,7 @@ export default function BooksView() {
                         className="btn btn--ghost btn--sm"
                         type="button"
                         disabled={busy}
-                        onClick={() => void run(
-                          () => api.setBookChapterSkipped(detail.id, chapter.id, !chapter.skipped),
-                          () => setChapterEdits(true),
-                        )}
+                        onClick={() => void run(() => api.setBookChapterSkipped(detail.id, chapter.id, !chapter.skipped))}
                       >
                         {chapter.skipped ? "恢复这章" : "跳过这章"}
                       </button>
@@ -446,10 +440,7 @@ export default function BooksView() {
                           className="btn btn--ghost btn--sm"
                           type="button"
                           disabled={busy}
-                          onClick={() => void run(
-                            () => api.mergeBookChapter(detail.id, chapter.id),
-                            () => setChapterEdits(true),
-                          )}
+                          onClick={() => void run(() => api.mergeBookChapter(detail.id, chapter.id))}
                         >
                           与下一章合并
                         </button>
