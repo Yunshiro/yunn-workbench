@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import express from "express";
 import { app } from "./http.js";
+import { recoverInterruptedReading } from "./reading-service.js";
 import { FETCH_INTERVAL_MS, HOST, PORT, RETENTION_DAYS, WEB_DIST } from "./config.js";
 import { fetchAllFeeds } from "./rss.js";
 import { pruneOldItems, listFeeds } from "./db.js";
@@ -62,6 +63,7 @@ let activeServer: WorkbenchServer | null = null;
 /** 启动可被 CLI 与源码开发模式共同复用的本地服务。 */
 export async function startWorkbenchServer(options: { port?: number; host?: string } = {}): Promise<WorkbenchServer> {
   if (activeServer) return activeServer;
+  recoverInterruptedReading();
   const port = options.port ?? PORT;
   const host = options.host ?? HOST;
   const server = await new Promise<Server>((resolveServer, reject) => {

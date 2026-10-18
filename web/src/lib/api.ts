@@ -23,6 +23,9 @@ import type {
   BoardCard,
   BoardSession,
   BoardMessage,
+  BookDetail,
+  BookSummary,
+  BookType,
 } from "./types";
 
 async function parse<T>(res: Response): Promise<T> {
@@ -239,6 +242,32 @@ export const api = {
     fetch(`/api/boards/${id}/sessions`, { method: "POST" }).then((r) => parse<BoardSession>(r)),
   listBoardMessages: (id: string, sessionId: string) =>
     fetch(`/api/boards/${id}/sessions/${sessionId}/messages`).then((r) => parse<BoardMessage[]>(r)),
+  listBooks: () => fetch("/api/books").then((r) => parse<BookSummary[]>(r)),
+  getBook: (id: string) => fetch(`/api/books/${id}`).then((r) => parse<BookDetail>(r)),
+  importBook: async (file: File) => {
+    const res = await fetch("/api/books", {
+      method: "POST",
+      headers: { "Content-Type": "application/epub+zip" },
+      body: file,
+    });
+    return parse<BookDetail>(res);
+  },
+  updateBook: (id: string, input: { title?: string; author?: string; bookType?: BookType; rebuild?: boolean }) =>
+    fetch(`/api/books/${id}`, { method: "PATCH", headers: jsonHeaders, body: JSON.stringify(input) }).then((r) => parse<BookDetail>(r)),
+  setBookLevel: (id: string, level: number, confirm = false) =>
+    fetch(`/api/books/${id}/level`, { method: "POST", headers: jsonHeaders, body: JSON.stringify({ level, confirm }) }).then((r) => parse<BookDetail>(r)),
+  useBookHeadings: (id: string, confirm = false) =>
+    fetch(`/api/books/${id}/level`, { method: "POST", headers: jsonHeaders, body: JSON.stringify({ source: "spine", confirm }) }).then((r) => parse<BookDetail>(r)),
+  setBookChapterSkipped: (id: string, chapterId: string, skipped: boolean) =>
+    fetch(`/api/books/${id}/chapters/${chapterId}/skip`, { method: "POST", headers: jsonHeaders, body: JSON.stringify({ skipped }) }).then((r) => parse<BookDetail>(r)),
+  renameBookChapter: (id: string, chapterId: string, title: string) =>
+    fetch(`/api/books/${id}/chapters/${chapterId}`, { method: "PATCH", headers: jsonHeaders, body: JSON.stringify({ title }) }).then((r) => parse<BookDetail>(r)),
+  mergeBookChapter: (id: string, chapterId: string) =>
+    fetch(`/api/books/${id}/chapters/${chapterId}/merge`, { method: "POST" }).then((r) => parse<BookDetail>(r)),
+  confirmBook: (id: string) => fetch(`/api/books/${id}/confirm`, { method: "POST" }).then((r) => parse<BookDetail>(r)),
+  continueBook: (id: string) => fetch(`/api/books/${id}/continue`, { method: "POST" }).then((r) => parse<BookDetail>(r)),
+  reopenBook: (id: string) => fetch(`/api/books/${id}/reopen`, { method: "POST" }).then((r) => parse<BookDetail>(r)),
+  deleteBook: (id: string) => fetch(`/api/books/${id}`, { method: "DELETE" }).then((r) => parse<{ ok: boolean }>(r)),
   sendBoardMessage: (id: string, sessionId: string, content: string, cardIds?: string[]) =>
     fetch(`/api/boards/${id}/sessions/${sessionId}/messages`, {
       method: "POST",

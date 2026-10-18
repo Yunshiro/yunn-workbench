@@ -24,6 +24,7 @@ const EVENT_TYPES = [
   "board_deleted",
   "board_message",
   "board_message_delta",
+  "book_progress",
 ] as const;
 
 /** 全局只建立一条 SSE 连接，组件通过 useEvent 订阅 */

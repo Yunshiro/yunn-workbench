@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 const home = mkdtempSync(join(tmpdir(), "workbench-test-"));
 seedLegacyKnowledgeBase(home);
 
-const child = spawn(process.execPath, ["--import", "tsx", "--test", "--test-concurrency=1", "src/legacy-kb-data.test.ts", "src/boards.test.ts"], {
+const child = spawn(process.execPath, ["--import", "tsx", "--test", "--test-concurrency=1", "src/legacy-kb-data.test.ts", "src/boards.test.ts", "src/reading.test.ts"], {
   cwd: dirname(fileURLToPath(import.meta.url)),
   env: { ...process.env, WORKBENCH_HOME: home },
   stdio: "inherit",

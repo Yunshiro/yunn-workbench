@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import {
+  BookOpen,
   Lightbulb,
   ListChecks,
   Newspaper,
@@ -18,8 +19,9 @@ import TasksView from "./views/TasksView";
 import SettingsView from "./views/SettingsView";
 import DraftsView from "./views/DraftsView";
 import BoardsView from "./views/BoardsView";
+import BooksView from "./views/BooksView";
 
-type View = "items" | "feeds" | "topics" | "drafts" | "boards" | "tasks" | "settings";
+type View = "items" | "feeds" | "topics" | "drafts" | "boards" | "books" | "tasks" | "settings";
 
 const NAV: { id: View; label: string; icon: typeof Newspaper; badge?: boolean }[] = [
   { id: "items", label: "信息流", icon: Newspaper, badge: true },
@@ -27,6 +29,7 @@ const NAV: { id: View; label: string; icon: typeof Newspaper; badge?: boolean }[
   { id: "topics", label: "选题", icon: Lightbulb },
   { id: "drafts", label: "草稿箱", icon: NotePencil },
   { id: "boards", label: "画板", icon: SquaresFour },
+  { id: "books", label: "读书", icon: BookOpen },
   { id: "tasks", label: "任务", icon: ListChecks },
   { id: "settings", label: "Agent 设置", icon: SlidersHorizontal },
 ];
@@ -37,6 +40,7 @@ const TITLES: Record<View, string> = {
   topics: "选题看板",
   drafts: "推文草稿箱",
   boards: "画板",
+  books: "读书",
   tasks: "AI 任务",
   settings: "Agent 设置",
 };
@@ -144,6 +148,9 @@ export default function App() {
           {view === "boards" && (
             <span className="topbar__hint">粘贴链接生成卡片，双击空白处写便签，右侧可以对着卡片提问。</span>
           )}
+          {view === "books" && (
+            <span className="topbar__hint">导入 epub 后先核对章节，确认后才开始写笔记。</span>
+          )}
         </div>
         <div className={`content${view === "boards" ? " content--workspace" : ""}`}>
           {view === "items" && <ItemsView onUnreadChange={setUnread} />}
@@ -151,6 +158,7 @@ export default function App() {
           {view === "topics" && <TopicsView onCreateDraft={createDraftForTopic} />}
           {view === "drafts" && <DraftsView createForTopicId={draftTopicId} />}
           {view === "boards" && <BoardsView />}
+          {view === "books" && <BooksView />}
           {view === "tasks" && <TasksView />}
           {view === "settings" && <SettingsView onConfigChanged={refreshAgent} />}
         </div>
