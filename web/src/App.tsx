@@ -8,9 +8,12 @@ import {
   Rss,
   SlidersHorizontal,
   SquaresFour,
+  Toolbox,
 } from "@phosphor-icons/react";
 import { api } from "./lib/api";
+import { parsePath, pathFor, type AppRoute, type AppView } from "./lib/route";
 import { useEvent } from "./lib/sse";
+import { findToolboxTool } from "./lib/toolbox";
 import { StatusDot } from "./components/ui";
 import ItemsView from "./views/ItemsView";
 import FeedsView from "./views/FeedsView";
@@ -20,8 +23,9 @@ import SettingsView from "./views/SettingsView";
 import DraftsView from "./views/DraftsView";
 import BoardsView from "./views/BoardsView";
 import BooksView from "./views/BooksView";
+import { ToolboxScreen } from "./views/ToolboxView";
 
-type View = "items" | "feeds" | "topics" | "drafts" | "boards" | "books" | "tasks" | "settings";
+type View = AppView;
 
 const NAV: { id: View; label: string; icon: typeof Newspaper; badge?: boolean }[] = [
   { id: "items", label: "信息流", icon: Newspaper, badge: true },
@@ -30,6 +34,7 @@ const NAV: { id: View; label: string; icon: typeof Newspaper; badge?: boolean }[
   { id: "drafts", label: "草稿箱", icon: NotePencil },
   { id: "boards", label: "画板", icon: SquaresFour },
   { id: "books", label: "读书", icon: BookOpen },
+  { id: "toolbox", label: "工具箱", icon: Toolbox },
   { id: "tasks", label: "任务", icon: ListChecks },
   { id: "settings", label: "Agent 设置", icon: SlidersHorizontal },
 ];
@@ -41,27 +46,51 @@ const TITLES: Record<View, string> = {
   drafts: "推文草稿箱",
   boards: "画板",
   books: "读书",
+  toolbox: "工具箱",
   tasks: "AI 任务",
   settings: "Agent 设置",
 };
 
 export default function App() {
-  const [view, setView] = useState<View>("items");
+  const [route, setRoute] = useState<AppRoute>(() => parsePath(window.location.pathname));
   const [unread, setUnread] = useState(0);
   const [agentReady, setAgentReady] = useState<boolean | null>(null);
   const [agentConfigured, setAgentConfigured] = useState(false);
   const [agentError, setAgentError] = useState<string | null>(null);
   const [draftTopicId, setDraftTopicId] = useState<string | null>(null);
+  const view = route.view;
+
+  function commitRoute(next: AppRoute) {
+    const path = pathFor(next);
+    if (window.location.pathname !== path) {
+      window.history.pushState(null, "", path);
+    }
+    setRoute(next);
+  }
 
   function navigate(viewId: View) {
     setDraftTopicId(null);
-    setView(viewId);
+    commitRoute({ view: viewId, toolId: null });
+  }
+
+  function openToolboxTool(toolId: string) {
+    setDraftTopicId(null);
+    commitRoute({ view: "toolbox", toolId });
   }
 
   function createDraftForTopic(topicId: string) {
     setDraftTopicId(topicId);
-    setView("drafts");
+    commitRoute({ view: "drafts", toolId: null });
   }
+
+  useEffect(() => {
+    const onPopState = () => {
+      setRoute(parsePath(window.location.pathname));
+      setDraftTopicId(null);
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
 
   const refreshAgent = useCallback(async () => {
     try {
@@ -86,6 +115,10 @@ export default function App() {
 
   const agentState: "ok" | "err" | "idle" | "run" =
     agentReady ? "ok" : agentConfigured || agentReady === null ? "idle" : "err";
+  const pageTitle = view === "toolbox" && route.toolId
+    ? (findToolboxTool(route.toolId)?.name ?? TITLES.toolbox)
+    : TITLES[view];
+  const workspace = view === "boards" || (view === "toolbox" && findToolboxTool(route.toolId)?.id === "text-cards");
 
   return (
     <div className="app">
@@ -140,7 +173,7 @@ export default function App() {
 
       <main className="main">
         <div className="topbar">
-          <span className="topbar__title">{TITLES[view]}</span>
+          <span className="topbar__title">{pageTitle}</span>
           <div className="toolbar__spacer" />
           {view === "items" && (
             <span className="topbar__hint">勾选条目 → 底部运行 AI 任务（摘要 / 评估 / 聚类 / 找选题）</span>
@@ -151,14 +184,27 @@ export default function App() {
           {view === "books" && (
             <span className="topbar__hint">导入 epub 后先核对章节，确认后才开始写笔记。</span>
           )}
+          {view === "toolbox" && !route.toolId && (
+            <span className="topbar__hint">本地小工具，生成结果只保存在这台浏览器。</span>
+          )}
+          {view === "toolbox" && route.toolId === "text-cards" && (
+            <span className="topbar__hint">封面、语录和正文分页可导出为 1080×1440 PNG。</span>
+          )}
         </div>
-        <div className={`content${view === "boards" ? " content--workspace" : ""}`}>
+        <div className={`content${workspace ? " content--workspace" : ""}`}>
           {view === "items" && <ItemsView onUnreadChange={setUnread} />}
           {view === "feeds" && <FeedsView />}
           {view === "topics" && <TopicsView onCreateDraft={createDraftForTopic} />}
           {view === "drafts" && <DraftsView createForTopicId={draftTopicId} />}
           {view === "boards" && <BoardsView />}
           {view === "books" && <BooksView />}
+          {view === "toolbox" && (
+            <ToolboxScreen
+              toolId={route.toolId}
+              onOpen={openToolboxTool}
+              onBack={() => navigate("toolbox")}
+            />
+          )}
           {view === "tasks" && <TasksView />}
           {view === "settings" && <SettingsView onConfigChanged={refreshAgent} />}
         </div>
