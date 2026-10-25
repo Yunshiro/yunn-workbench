@@ -3882,3 +3882,427 @@ body.modal-open .content {
     writing-mode: horizontal-tb;
   }
 }
+
+/* ============================================================
+   工具箱 / 字卡
+   卡片画面由 canvas 绘制，这里只改工作台外壳。
+   ============================================================ */
+
+.toolbox__lead {
+  margin: 0 0 16px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.toolbox__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.toolbox-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 16px;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+}
+
+.toolbox-card:hover {
+  border-color: var(--line-strong);
+}
+
+.toolbox-card__mark {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 650;
+}
+
+.toolbox-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.toolbox-card__name {
+  color: var(--ink);
+  font-weight: 650;
+}
+
+.toolbox-card__desc {
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.toolbox-card__go {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  color: var(--faint);
+  font-size: 12px;
+}
+
+.text-cards {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(320px, 440px) minmax(0, 1fr);
+  background: var(--bg);
+}
+
+.text-cards__editor,
+.text-cards__preview {
+  min-width: 0;
+  min-height: 0;
+}
+
+.text-cards__editor {
+  overflow: auto;
+  padding: 20px 22px 32px;
+  background: var(--surface);
+  border-right: 1px solid var(--line);
+}
+
+.text-cards__intro {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.text-cards__intro h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.text-cards__intro p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.text-cards__intro-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.text-cards__save {
+  color: var(--faint);
+  font-size: 12px;
+}
+
+.text-cards__save--saved {
+  color: var(--green-ink);
+}
+
+.text-cards__field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 14px;
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.text-cards__field small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.text-cards__hint--warning {
+  color: var(--red-ink);
+  font-weight: 650;
+}
+
+.text-cards__field-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.text-cards__field-head span:last-child,
+.text-cards__themes-wrap .text-cards__field-head span:last-child {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.text-cards__control {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.6;
+  padding: 8px 10px;
+}
+
+textarea.text-cards__control {
+  resize: vertical;
+  min-height: 0;
+}
+
+.text-cards__control:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.text-cards__control::placeholder {
+  color: var(--faint);
+}
+
+.text-cards__generate {
+  width: 100%;
+  margin-top: 12px;
+}
+
+.text-cards__divider {
+  height: 1px;
+  margin: 18px 0 4px;
+  background: var(--line);
+}
+
+.text-cards__split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.text-cards__split .text-cards__field {
+  margin-top: 14px;
+}
+
+.text-cards__page-editor {
+  padding: 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+}
+
+.text-cards__page-editor .text-cards__control {
+  background: var(--surface);
+}
+
+.text-cards__themes-wrap {
+  margin-top: 18px;
+}
+
+.text-cards__themes {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.text-cards__swatch {
+  display: grid;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 550;
+  text-align: left;
+}
+
+.text-cards__swatch:hover,
+.text-cards__swatch--active {
+  border-color: var(--line-strong);
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.text-cards__swatch--active {
+  border-color: var(--ink);
+}
+
+.text-cards__swatch-chip {
+  display: block;
+  height: 36px;
+  border-radius: var(--r-sm);
+  box-shadow: inset 0 0 0 1px rgba(27, 27, 24, 0.08);
+}
+
+.text-cards__preview {
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  background: var(--bg);
+}
+
+.text-cards__toolbar,
+.text-cards__status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 18px;
+  background: var(--surface);
+}
+
+.text-cards__toolbar {
+  border-bottom: 1px solid var(--line);
+}
+
+.text-cards__toolbar > div:first-child {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.text-cards__preview-title {
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.text-cards__dimensions {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.text-cards__exports {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.text-cards__stage {
+  display: grid;
+  place-items: center;
+  padding: 28px 20px;
+  background:
+    linear-gradient(180deg, rgba(27, 27, 24, 0.035), transparent 120px),
+    var(--bg);
+}
+
+.text-cards__canvas {
+  display: block;
+  width: min(100%, 460px);
+  height: auto;
+  background: transparent;
+  box-shadow: var(--shadow-2);
+}
+
+.text-cards__status {
+  border-top: 1px solid var(--line);
+}
+
+.text-cards__status p {
+  margin: 0;
+  color: var(--green-ink);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.text-cards__pager {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+}
+
+.text-cards__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 18px 12px;
+  background: var(--surface);
+}
+
+.text-cards__actions .btn--danger {
+  border-color: var(--line);
+  background: var(--surface);
+}
+
+.text-cards__strip {
+  position: relative;
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 12px 18px 16px;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.text-cards__chip {
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 6px 10px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 550;
+}
+
+.text-cards__chip:hover {
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+
+.text-cards__chip--active {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: #fff;
+}
+
+@media (max-width: 960px) {
+  .text-cards {
+    grid-template-columns: 1fr;
+    overflow: auto;
+  }
+
+  .text-cards__editor {
+    overflow: visible;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .text-cards__preview {
+    overflow: visible;
+  }
+
+  .text-cards__split,
+  .text-cards__themes {
+    grid-template-columns: 1fr 1fr;
+  }
+}
